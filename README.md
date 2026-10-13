@@ -3,7 +3,7 @@
 เกมโลกออนไลน์แนว Social + Life Simulation + Business Simulation สำหรับทุกวัย เริ่มที่ Android ในประเทศไทย
 
 > สถานะปัจจุบัน: **Phase 1–3 เสร็จและผ่านการทดสอบแล้ว** (Foundation, Core Game API, Multiplayer: เพื่อน บล็อก รายงาน WebSocket เมืองออนไลน์)
-> Unity client ยังไม่ได้สร้าง (เครื่องที่ใช้พัฒนารอบนี้ไม่มี Unity Editor / Android SDK) ดู [apps/game-client/README.md](apps/game-client/README.md)
+> **Phase 4 (Unity client)**: เขียนโค้ดครบและทดสอบส่วน C# Core กับ backend จริงแล้ว แต่ยังไม่ได้เปิดใน Unity Editor หรือ build APK ดู [docs/phase-4-report.md](docs/phase-4-report.md) และ [docs/unity-client.md](docs/unity-client.md)
 
 ## โครงสร้างโปรเจกต์
 
@@ -14,7 +14,7 @@ happy-world-online/
 │   │   ├── prisma/           schema.prisma และ migrations
 │   │   ├── src/              โค้ด API แยกตามโมดูล (auth, player, wallet, quests, store, business, purchases)
 │   │   └── test/             integration tests (ใช้ฐานข้อมูลทดสอบแยก)
-│   └── game-client/          Unity project (Phase 4)
+│   └── game-client/          Unity 6 project (Phase 4): Assets/_Project, Tests (dotnet)
 ├── packages/
 │   └── shared-contracts/     zod schemas, error codes, ค่าสมดุลเกม ใช้ร่วมกันระหว่าง server/client
 ├── infrastructure/docker/    Docker Compose (Postgres, Redis, backend) และ Dockerfile
@@ -69,6 +69,7 @@ npm run start:dev
 | `npm run test:e2e` | integration tests กับ PostgreSQL จริง (ฐาน `happy_world_test` เท่านั้น) |
 | `HWO_TEST_REDIS_URL=redis://localhost:6379/15 npm run test:e2e` | รันชุดเดียวกันโดยใช้ Redis จริง (ล้าง Redis db 15 ก่อนรัน) |
 | `./scripts/test-all.sh` | รันทั้งหมดข้างบน |
+| `./scripts/test-game-client.sh` | compile และ test C# Core ของ Unity client (.NET 8 หรือ Docker) |
 | `cd apps/backend && npx prisma migrate dev --name <ชื่อ>` | สร้าง migration ใหม่หลังแก้ schema |
 
 Integration tests จะ **ปฏิเสธการรัน** ถ้า `DATABASE_URL` ใน `apps/backend/.env.test` ไม่ได้ชี้ไปที่ฐานที่ชื่อลงท้ายด้วย `_test` เพื่อป้องกันการล้างข้อมูลผู้เล่นจริง
@@ -90,7 +91,7 @@ Integration tests จะ **ปฏิเสธการรัน** ถ้า `DAT
 
 รายละเอียดดู [docs/api.md](docs/api.md) และ [docs/openapi.json](docs/openapi.json)
 
-ยังไม่ได้ทำ (Phase 4 ขึ้นไป): Unity client, บ้านและเฟอร์นิเจอร์, มินิเกม, VIP/Season Pass, Google Play Billing จริง, ระบบผู้ดูแล (admin) สำหรับจัดการรายงาน
+ยังไม่ได้ทำ: build APK จริง (รอเครื่องที่มี Unity), บ้านและเฟอร์นิเจอร์, มินิเกม, VIP/Season Pass, Google Play Billing จริง, ระบบผู้ดูแล (admin) สำหรับจัดการรายงาน
 
 ## หลักการสำคัญ
 

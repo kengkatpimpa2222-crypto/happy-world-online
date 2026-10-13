@@ -20,3 +20,7 @@ apps/game-client/[Uu]ser[Ss]ettings/
 *.apk
 *.aab
 *.keystore
+apps/game-client/Tests/**/bin/
+apps/game-client/Tests/**/obj/
+apps/game-client/*.csproj
+apps/game-client/*.sln
