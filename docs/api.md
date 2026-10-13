@@ -69,4 +69,22 @@ curl -s -XPOST $API/businesses/$SHOP/sell -H "authorization: Bearer $TOKEN"
 | POST | /businesses/:id/sell | ขาย 1 รอบ (มี cooldown ค่าเริ่มต้น 30 วินาที) |
 | POST | /businesses/:id/upgrade | `{expectedLevel}` กดซ้ำไม่จ่ายซ้ำ |
 
+| POST | /friends/requests | `{friendCode}` หรือ `{playerId}`; ส่งซ้ำได้ request เดิม; ถ้าอีกฝ่ายขอมาก่อน = เป็นเพื่อนทันที (`autoAccepted`) |
+| GET | /friends/requests/incoming | คำขอที่รอเราตอบ |
+| GET | /friends/requests/outgoing | คำขอที่เราส่งและยังรออยู่ |
+| POST | /friends/requests/:id/accept | ผู้รับเท่านั้น (คนอื่นได้ 404); กดซ้ำได้ |
+| POST | /friends/requests/:id/decline | ผู้รับเท่านั้น; กดซ้ำได้ |
+| DELETE | /friends/requests/:id | ผู้ส่งยกเลิกคำขอ |
+| GET | /friends | รายชื่อเพื่อน + `online`, `zone` |
+| DELETE | /friends/:friendId | เลิกเป็นเพื่อน (ทั้งสองฝั่ง) ไม่ลบข้อมูลอื่น |
+| POST | /players/:id/block | บล็อก: ลบความเป็นเพื่อน ยกเลิกคำขอ ซ่อนกันในเมืองทันที |
+| DELETE | /players/:id/block | ยกเลิกบล็อก |
+| GET | /players/blocked | รายชื่อที่เราบล็อก |
+| POST | /moderation/reports | `{reportedPlayerId, reason, contextCode?, alsoBlock?}` ไม่มีช่องพิมพ์ข้อความอิสระ |
+| GET | /moderation/reports/me | รายงานของเรา (เห็นแค่สถานะ) |
+| GET | /city | ผังเมือง โซน ประตู ข้อความสำเร็จรูป และวิธีเชื่อม WebSocket |
+| GET | /city/players?zone= | ผู้เล่นออนไลน์ในโซนที่เรามองเห็นได้ |
+
+WebSocket: ดู [realtime.md](realtime.md)
+
 หมายเหตุ: ร้านค้าเพิ่ม `GET /businesses`, `PATCH /pricing`, `POST /restock` นอกเหนือจากรายการขั้นต่ำ เพราะต้องใช้สำหรับ "ตั้งราคา" และ "ซื้อวัตถุดิบ" ตามที่ระบุในฟีเจอร์ 3.4

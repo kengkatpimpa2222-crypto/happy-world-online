@@ -430,6 +430,10 @@ model FriendRequest {
   id          String              @id @default(uuid()) @db.Uuid
   fromUserId  String              @map("from_user_id") @db.Uuid
   toUserId    String              @map("to_user_id") @db.Uuid
+  /// "<smaller uuid>:<larger uuid>" — same for A->B and B->A.
+  /// Partial unique index (pair_key) WHERE status = 'PENDING' lives in migration SQL:
+  /// at most one open request per pair, which also blocks crossed requests.
+  pairKey     String              @map("pair_key") @db.VarChar(73)
   status      FriendRequestStatus @default(PENDING)
   createdAt   DateTime            @default(now()) @map("created_at")
   respondedAt DateTime?           @map("responded_at")
@@ -437,8 +441,9 @@ model FriendRequest {
   fromUser User @relation("SentRequests", fields: [fromUserId], references: [id], onDelete: Cascade)
   toUser   User @relation("ReceivedRequests", fields: [toUserId], references: [id], onDelete: Cascade)
 
-  @@unique([fromUserId, toUserId])
+  @@index([fromUserId, status])
   @@index([toUserId, status])
+  @@index([pairKey])
   @@map("friend_requests")
 }
 
@@ -472,8 +477,11 @@ model ModerationReport {
   reporter User @relation("Reporter", fields: [reporterId], references: [id], onDelete: Cascade)
   reported User @relation("Reported", fields: [reportedId], references: [id], onDelete: Cascade)
 
+  // Partial unique index (reporter_id, reported_id, reason) WHERE status = 'OPEN' in migration SQL:
+  // retrying the same report does not create duplicates.
   @@index([status, createdAt])
   @@index([reportedId])
+  @@index([reporterId, createdAt])
   @@map("moderation_reports")
 }
 

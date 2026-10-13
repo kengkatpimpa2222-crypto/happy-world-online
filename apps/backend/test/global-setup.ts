@@ -1,6 +1,7 @@
 import { execSync } from 'node:child_process';
 import { join } from 'node:path';
 import { PrismaClient } from '@prisma/client';
+import Redis from 'ioredis';
 import { loadTestEnv } from './load-test-env';
 import { seed } from '../src/database/seed';
 
@@ -28,5 +29,13 @@ export default async function globalSetup(): Promise<void> {
     await seed(prisma);
   } finally {
     await prisma.$disconnect();
+  }
+
+  if (process.env.REDIS_URL) {
+    const db = new URL(process.env.REDIS_URL).pathname.replace('/', '');
+    if (db !== '15') throw new Error('HWO_TEST_REDIS_URL must use Redis database 15 (it is flushed before tests)');
+    const redis = new Redis(process.env.REDIS_URL);
+    await redis.flushdb();
+    await redis.quit();
   }
 }

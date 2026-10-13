@@ -828,6 +828,430 @@
           "businesses"
         ]
       }
+    },
+    "/api/v1/city": {
+      "get": {
+        "operationId": "CityController_layout_v1",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "city"
+        ]
+      }
+    },
+    "/api/v1/city/players": {
+      "get": {
+        "operationId": "CityController_players_v1",
+        "parameters": [
+          {
+            "name": "zone",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "PLAZA",
+                "HOMES",
+                "MARKET",
+                "ACTIVITY",
+                "MINIGAME_GATE"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "city"
+        ]
+      }
+    },
+    "/api/v1/friends/requests": {
+      "post": {
+        "operationId": "FriendsController_send_v1",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "friendCode": {
+                    "type": "string",
+                    "pattern": "^[A-Z2-9]{8}$"
+                  },
+                  "playerId": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "friends"
+        ]
+      }
+    },
+    "/api/v1/friends/requests/incoming": {
+      "get": {
+        "operationId": "FriendsController_incoming_v1",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "friends"
+        ]
+      }
+    },
+    "/api/v1/friends/requests/outgoing": {
+      "get": {
+        "operationId": "FriendsController_outgoing_v1",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "friends"
+        ]
+      }
+    },
+    "/api/v1/friends/requests/{requestId}/accept": {
+      "post": {
+        "operationId": "FriendsController_accept_v1",
+        "parameters": [
+          {
+            "name": "requestId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "friends"
+        ]
+      }
+    },
+    "/api/v1/friends/requests/{requestId}/decline": {
+      "post": {
+        "operationId": "FriendsController_decline_v1",
+        "parameters": [
+          {
+            "name": "requestId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "friends"
+        ]
+      }
+    },
+    "/api/v1/friends/requests/{requestId}": {
+      "delete": {
+        "operationId": "FriendsController_cancel_v1",
+        "parameters": [
+          {
+            "name": "requestId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "friends"
+        ]
+      }
+    },
+    "/api/v1/friends": {
+      "get": {
+        "operationId": "FriendsController_list_v1",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "friends"
+        ]
+      }
+    },
+    "/api/v1/friends/{friendId}": {
+      "delete": {
+        "operationId": "FriendsController_remove_v1",
+        "parameters": [
+          {
+            "name": "friendId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "friends"
+        ]
+      }
+    },
+    "/api/v1/players/blocked": {
+      "get": {
+        "operationId": "PlayersController_blocked_v1",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "players"
+        ]
+      }
+    },
+    "/api/v1/players/{playerId}/block": {
+      "post": {
+        "operationId": "PlayersController_block_v1",
+        "parameters": [
+          {
+            "name": "playerId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "players"
+        ]
+      },
+      "delete": {
+        "operationId": "PlayersController_unblock_v1",
+        "parameters": [
+          {
+            "name": "playerId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "players"
+        ]
+      }
+    },
+    "/api/v1/moderation/reports": {
+      "post": {
+        "operationId": "ModerationController_report_v1",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "reportedPlayerId": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                  },
+                  "reason": {
+                    "type": "string",
+                    "enum": [
+                      "INAPPROPRIATE_NAME",
+                      "HARASSMENT",
+                      "CHEATING",
+                      "SPAM",
+                      "ASKING_PERSONAL_INFO",
+                      "OTHER"
+                    ]
+                  },
+                  "contextCode": {
+                    "type": "string",
+                    "enum": [
+                      "CITY",
+                      "PRESET_CHAT",
+                      "FRIEND_REQUEST",
+                      "PROFILE_NAME",
+                      "AVATAR",
+                      "HOME_VISIT",
+                      "MINIGAME"
+                    ]
+                  },
+                  "alsoBlock": {
+                    "default": false,
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "reportedPlayerId",
+                  "reason"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "moderation"
+        ]
+      }
+    },
+    "/api/v1/moderation/reports/me": {
+      "get": {
+        "operationId": "ModerationController_mine_v1",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "moderation"
+        ]
+      }
     }
   },
   "info": {

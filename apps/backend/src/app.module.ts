@@ -8,12 +8,16 @@ import { AppConfig } from './config/app-config.service';
 import { AppConfigModule } from './config/config.module';
 import { HealthController } from './health/health.controller';
 import { PlayerModule } from './player/player.module';
+import { PresenceModule } from './presence/presence.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { PurchasesModule } from './purchases/purchases.module';
 import { QuestsModule } from './quests/quests.module';
+import { RealtimeModule } from './realtime/realtime.module';
 import { RedisThrottlerStorage } from './redis/redis-throttler.storage';
 import { RedisModule } from './redis/redis.module';
 import { RedisService } from './redis/redis.service';
+import { SocialGraphModule } from './social/social-graph.module';
+import { SocialModule } from './social/social.module';
 import { StoreModule } from './store/store.module';
 import { WalletModule } from './wallet/wallet.module';
 
@@ -24,6 +28,8 @@ import { WalletModule } from './wallet/wallet.module';
     RedisModule,
     AuditModule,
     WalletModule,
+    PresenceModule,
+    SocialGraphModule,
     ThrottlerModule.forRootAsync({
       inject: [AppConfig, RedisService],
       useFactory: (config: AppConfig, redis: RedisService) => ({
@@ -37,6 +43,8 @@ import { WalletModule } from './wallet/wallet.module';
     StoreModule,
     PurchasesModule,
     BusinessModule,
+    RealtimeModule,
+    SocialModule,
   ],
   controllers: [HealthController],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],

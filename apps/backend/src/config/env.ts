@@ -21,6 +21,8 @@ export const envSchema = z.object({
   RATE_LIMIT_DEFAULT_PER_MINUTE: z.coerce.number().int().positive().default(120),
   RATE_LIMIT_GUEST_PER_HOUR: z.coerce.number().int().positive().default(10),
   RATE_LIMIT_AUTH_PER_15_MIN: z.coerce.number().int().positive().default(20),
+  RATE_LIMIT_FRIEND_REQUESTS_PER_HOUR: z.coerce.number().int().positive().default(30),
+  RATE_LIMIT_REPORTS_PER_HOUR: z.coerce.number().int().positive().default(20),
   BUSINESS_SALE_COOLDOWN_SECONDS: z.coerce.number().int().min(0).default(30),
 });
 

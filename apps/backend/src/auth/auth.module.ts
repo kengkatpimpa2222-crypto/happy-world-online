@@ -6,6 +6,7 @@ import { PlayerModule } from '../player/player.module';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { JwtAuthGuard } from './jwt-auth.guard';
+import { SessionVerifier } from './session-verifier.service';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { JwtAuthGuard } from './jwt-auth.guard';
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, { provide: APP_GUARD, useClass: JwtAuthGuard }],
+  providers: [AuthService, SessionVerifier, { provide: APP_GUARD, useClass: JwtAuthGuard }],
+  exports: [SessionVerifier],
 })
 export class AuthModule {}

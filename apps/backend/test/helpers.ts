@@ -46,3 +46,54 @@ export async function grantGold(prisma: PrismaService, userId: string, amount: n
     });
   });
 }
+
+// ---------- Phase 3 helpers ----------
+import { io, Socket } from 'socket.io-client';
+
+export async function friendCodeOf(app: INestApplication, p: TestPlayer): Promise<string> {
+  const res = await request(await app.getUrl()).get('/api/v1/player/profile').set(p.auth).expect(200);
+  return res.body.friendCode;
+}
+
+/** Connects to the realtime namespace and resolves after the server says `ready`. */
+export async function connectWs(app: INestApplication, token: string | undefined): Promise<Socket> {
+  const base = (await app.getUrl()).replace('[::1]', '127.0.0.1');
+  const socket = io(`${base}/realtime`, { path: '/ws', auth: token ? { token } : {}, transports: ['websocket'], reconnection: false, forceNew: true });
+  await new Promise<void>((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error('ws connect timeout')), 5000);
+    socket.once('ready', () => {
+      clearTimeout(t);
+      resolve();
+    });
+    socket.once('connect_error', (e) => {
+      clearTimeout(t);
+      reject(e);
+    });
+  });
+  return socket;
+}
+
+/** Waits for the next `event` matching `match`; rejects after `ms`. */
+export function waitFor<T = Record<string, unknown>>(socket: Socket, event: string, match: (p: T) => boolean = () => true, ms = 3000): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const t = setTimeout(() => {
+      socket.off(event, handler);
+      reject(new Error(`timeout waiting for ${event}`));
+    }, ms);
+    const handler = (p: T) => {
+      if (!match(p)) return;
+      clearTimeout(t);
+      socket.off(event, handler);
+      resolve(p);
+    };
+    socket.on(event, handler);
+  });
+}
+
+/** Resolves true if `event` matching `match` arrives within `ms`, else false. */
+export function receivedWithin<T = Record<string, unknown>>(socket: Socket, event: string, match: (p: T) => boolean = () => true, ms = 400): Promise<boolean> {
+  return waitFor(socket, event, match, ms).then(
+    () => true,
+    () => false,
+  );
+}

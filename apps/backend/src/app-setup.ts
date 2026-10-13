@@ -5,6 +5,7 @@ import helmet from 'helmet';
 import { HttpExceptionFilter } from './common/http-exception.filter';
 import { requestIdMiddleware } from './common/request-id.middleware';
 import { AppConfig } from './config/app-config.service';
+import { AppIoAdapter } from './realtime/io-adapter';
 
 /** Shared by main.ts and the integration tests so tests exercise the real HTTP pipeline. */
 export function configureApp(app: INestApplication): void {
@@ -29,6 +30,7 @@ export function configureApp(app: INestApplication): void {
   app.enableVersioning({ type: VersioningType.URI, defaultVersion: '1' });
   app.useGlobalFilters(new HttpExceptionFilter());
   app.enableShutdownHooks();
+  app.useWebSocketAdapter(new AppIoAdapter(app));
 
   // API docs are a development tool: never exposed in production.
   if (config.get('SWAGGER_ENABLED') && !config.isProduction) {

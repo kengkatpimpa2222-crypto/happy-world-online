@@ -14,7 +14,7 @@ describe('Phase 1 foundation: health + database migration', () => {
 
   it('GET /api/v1/health reports the database as up', async () => {
     const res = await http().get('/api/v1/health').expect(200);
-    expect(res.body).toMatchObject({ status: 'ok', checks: { database: 'up', redis: 'disabled' } });
+    expect(res.body).toMatchObject({ status: 'ok', checks: { database: 'up', redis: process.env.REDIS_URL ? 'up' : 'disabled' } });
   });
 
   it('sets security headers and a request id, hides x-powered-by', async () => {
