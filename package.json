@@ -1,0 +1,21 @@
+{
+  "name": "happy-world-online",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Happy World Online — monorepo (backend, shared contracts, Unity client scripts)",
+  "workspaces": [
+    "packages/*",
+    "apps/backend"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "npm run build -w @hwo/shared-contracts && npm run build -w @hwo/backend",
+    "lint": "npm run lint -w @hwo/backend",
+    "typecheck": "npm run typecheck -w @hwo/shared-contracts && npm run typecheck -w @hwo/backend",
+    "test": "npm run test -w @hwo/backend",
+    "test:e2e": "npm run test:e2e -w @hwo/backend",
+    "dev": "npm run start:dev -w @hwo/backend"
+  }
+}

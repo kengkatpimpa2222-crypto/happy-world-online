@@ -1,0 +1,556 @@
+// Happy World Online — Prisma schema
+// หลักการ: เซิร์ฟเวอร์เป็นผู้ตัดสินยอดเงิน/รางวัล/สินค้าคงคลังทั้งหมด
+// ข้อจำกัดเพิ่มเติม (CHECK constraints) อยู่ในไฟล์ migration.sql ของ migration แรก
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------- Enums ----------
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  DELETED
+}
+
+/// เก็บเฉพาะช่วงอายุ ไม่เก็บวันเกิด (data minimization)
+enum AgeBand {
+  UNDER_13
+  TEEN_13_17
+  ADULT_18_PLUS
+}
+
+enum Currency {
+  GOLD
+  GEMS
+}
+
+enum WalletTransactionType {
+  SIGNUP_BONUS
+  QUEST_REWARD
+  STORE_PURCHASE
+  BUSINESS_RESTOCK
+  BUSINESS_SALE
+  BUSINESS_UPGRADE
+  MINIGAME_REWARD
+  IAP_GRANT
+  IAP_REFUND
+  ADMIN_ADJUSTMENT
+}
+
+enum ItemCategory {
+  OUTFIT
+  HAIR
+  ACCESSORY
+  FURNITURE
+  FLOOR
+  WALL
+  THEME
+}
+
+enum QuestCategory {
+  NEWBIE
+  CHAPTER
+  BUSINESS
+  HOME
+  COOP
+  LIFE_SKILL
+}
+
+enum QuestObjectiveType {
+  UPDATE_PROFILE
+  BUY_ITEM
+  BUSINESS_RESTOCK
+  BUSINESS_SELL_UNITS
+  BUSINESS_EARN_PROFIT
+  BUSINESS_UPGRADE
+  PLACE_FURNITURE
+  ADD_FRIEND
+  PLAY_MINIGAME
+}
+
+enum QuestStatus {
+  IN_PROGRESS
+  COMPLETED
+  CLAIMED
+}
+
+enum FriendRequestStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  CANCELLED
+}
+
+enum ReportReason {
+  INAPPROPRIATE_NAME
+  HARASSMENT
+  CHEATING
+  SPAM
+  ASKING_PERSONAL_INFO
+  OTHER
+}
+
+enum ReportStatus {
+  OPEN
+  REVIEWING
+  ACTIONED
+  DISMISSED
+}
+
+enum PurchaseProvider {
+  GOOGLE_PLAY
+  DEV_MOCK
+}
+
+enum PurchaseStatus {
+  PENDING
+  VERIFIED
+  GRANTED
+  REFUNDED
+  FAILED
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  GRACE_PERIOD
+  CANCELLED
+  EXPIRED
+}
+
+// ---------- Accounts ----------
+
+model User {
+  id                String     @id @default(uuid()) @db.Uuid
+  status            UserStatus @default(ACTIVE)
+  ageBand           AgeBand    @map("age_band")
+  locale            String     @default("th") @db.VarChar(8)
+  /// null = บัญชี Guest ที่ยังไม่ได้เชื่อม
+  email             String?    @unique @db.VarChar(254)
+  passwordHash      String?    @map("password_hash")
+  linkedAt          DateTime?  @map("linked_at")
+  /// sha256 ของ device id ใช้ตรวจจับการสร้างบัญชีจำนวนมาก ไม่ใช้ยืนยันตัวตน
+  deviceIdHash      String?    @map("device_id_hash") @db.VarChar(64)
+  parentalConsentAt DateTime?  @map("parental_consent_at")
+  createdAt         DateTime   @default(now()) @map("created_at")
+  updatedAt         DateTime   @updatedAt @map("updated_at")
+  deletedAt         DateTime?  @map("deleted_at")
+
+  profile            PlayerProfile?
+  wallets            PlayerWallet[]
+  walletTransactions WalletTransaction[]
+  inventory          PlayerInventory[]
+  home               PlayerHome?
+  businesses         Business[]
+  questProgress      QuestProgress[]
+  sessions           GameSession[]
+  purchases          Purchase[]
+  subscriptions      Subscription[]
+  friends            Friend[]            @relation("UserFriends")
+  friendOf           Friend[]            @relation("FriendOfUser")
+  sentRequests       FriendRequest[]     @relation("SentRequests")
+  receivedRequests   FriendRequest[]     @relation("ReceivedRequests")
+  blocking           BlockedPlayer[]     @relation("Blocker")
+  blockedBy          BlockedPlayer[]     @relation("Blocked")
+  reportsMade        ModerationReport[]  @relation("Reporter")
+  reportsReceived    ModerationReport[]  @relation("Reported")
+
+  @@index([deviceIdHash])
+  @@map("users")
+}
+
+model PlayerProfile {
+  userId       String   @id @map("user_id") @db.Uuid
+  displayName  String   @map("display_name") @db.VarChar(20)
+  /// รหัสสั้นสำหรับค้นหาเพื่อน (ไม่เปิดเผย user id)
+  friendCode   String   @unique @map("friend_code") @db.VarChar(10)
+  level        Int      @default(1)
+  xp           Int      @default(0)
+  /// { bodyColor, outfitItemId, hairItemId, accessoryItemId }
+  avatar       Json     @default("{}")
+  achievements Json     @default("[]")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("player_profiles")
+}
+
+/// เซสชันการเล่น/ล็อกอิน 1 แถวต่อ 1 refresh token chain
+model GameSession {
+  id               String    @id @default(uuid()) @db.Uuid
+  userId           String    @map("user_id") @db.Uuid
+  refreshTokenHash String    @unique @map("refresh_token_hash") @db.VarChar(64)
+  userAgent        String?   @map("user_agent") @db.VarChar(255)
+  expiresAt        DateTime  @map("expires_at")
+  revokedAt        DateTime? @map("revoked_at")
+  lastSeenAt       DateTime  @default(now()) @map("last_seen_at")
+  createdAt        DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, revokedAt])
+  @@map("game_sessions")
+}
+
+// ---------- Economy ----------
+
+model PlayerWallet {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  currency  Currency
+  /// CHECK (balance >= 0) ใน migration
+  balance   Int      @default(0)
+  version   Int      @default(0)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user         User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions WalletTransaction[]
+
+  @@unique([userId, currency])
+  @@map("player_wallets")
+}
+
+/// สมุดบัญชีแบบ append-only ทุกการเปลี่ยนยอดเงินต้องมีแถวที่นี่
+model WalletTransaction {
+  id             String                @id @default(uuid()) @db.Uuid
+  userId         String                @map("user_id") @db.Uuid
+  walletId       String                @map("wallet_id") @db.Uuid
+  currency       Currency
+  type           WalletTransactionType
+  /// บวก = รับเงิน, ลบ = จ่ายเงิน
+  amount         Int
+  balanceBefore  Int                   @map("balance_before")
+  balanceAfter   Int                   @map("balance_after")
+  referenceType  String?               @map("reference_type") @db.VarChar(40)
+  referenceId    String?               @map("reference_id") @db.VarChar(120)
+  /// ป้องกันคำขอซ้ำ: unique ต่อผู้เล่น
+  idempotencyKey String                @map("idempotency_key") @db.VarChar(160)
+  metadata       Json?
+  createdAt      DateTime              @default(now()) @map("created_at")
+
+  user   User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  wallet PlayerWallet @relation(fields: [walletId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, idempotencyKey])
+  @@index([userId, createdAt])
+  @@index([referenceType, referenceId])
+  @@map("wallet_transactions")
+}
+
+/// แคตตาล็อกไอเทม ผู้ดูแลปรับราคาได้ที่ตารางนี้ (null = ซื้อด้วยสกุลนั้นไม่ได้)
+model Item {
+  id        String       @id @db.VarChar(64)
+  category  ItemCategory
+  nameKey   String       @map("name_key") @db.VarChar(120)
+  priceGold Int?         @map("price_gold")
+  priceGems Int?         @map("price_gems")
+  isPremium Boolean      @default(false) @map("is_premium")
+  isActive  Boolean      @default(true) @map("is_active")
+  sortOrder Int          @default(0) @map("sort_order")
+  metadata  Json         @default("{}")
+  createdAt DateTime     @default(now()) @map("created_at")
+  updatedAt DateTime     @updatedAt @map("updated_at")
+  deletedAt DateTime?    @map("deleted_at")
+
+  inventory PlayerInventory[]
+  furniture HomeFurniture[]
+
+  @@index([category, isActive])
+  @@map("items")
+}
+
+model PlayerInventory {
+  id         String   @id @default(uuid()) @db.Uuid
+  userId     String   @map("user_id") @db.Uuid
+  itemId     String   @map("item_id") @db.VarChar(64)
+  /// CHECK (quantity >= 0)
+  quantity   Int      @default(0)
+  acquiredAt DateTime @default(now()) @map("acquired_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  item Item @relation(fields: [itemId], references: [id])
+
+  @@unique([userId, itemId])
+  @@map("player_inventory")
+}
+
+// ---------- Home ----------
+
+model PlayerHome {
+  id            String   @id @default(uuid()) @db.Uuid
+  userId        String   @unique @map("user_id") @db.Uuid
+  themeItemId   String?  @map("theme_item_id") @db.VarChar(64)
+  floorItemId   String?  @map("floor_item_id") @db.VarChar(64)
+  wallItemId    String?  @map("wall_item_id") @db.VarChar(64)
+  /// ขนาดกริดของห้อง
+  gridWidth     Int      @default(8) @map("grid_width")
+  gridHeight    Int      @default(8) @map("grid_height")
+  layoutVersion Int      @default(0) @map("layout_version")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  furniture HomeFurniture[]
+
+  @@map("player_homes")
+}
+
+model HomeFurniture {
+  id        String   @id @default(uuid()) @db.Uuid
+  homeId    String   @map("home_id") @db.Uuid
+  itemId    String   @map("item_id") @db.VarChar(64)
+  x         Int
+  y         Int
+  /// 0, 90, 180, 270
+  rotation  Int      @default(0)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  home PlayerHome @relation(fields: [homeId], references: [id], onDelete: Cascade)
+  item Item       @relation(fields: [itemId], references: [id])
+
+  @@unique([homeId, x, y])
+  @@index([homeId, itemId])
+  @@map("home_furniture")
+}
+
+// ---------- Business simulation ----------
+
+model Business {
+  id             String    @id @default(uuid()) @db.Uuid
+  userId         String    @map("user_id") @db.Uuid
+  name           String    @db.VarChar(30)
+  level          Int       @default(1)
+  totalRevenue   Int       @default(0) @map("total_revenue")
+  totalExpense   Int       @default(0) @map("total_expense")
+  totalUnitsSold Int       @default(0) @map("total_units_sold")
+  lastSaleAt     DateTime? @map("last_sale_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+  deletedAt      DateTime? @map("deleted_at")
+
+  user      User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  inventory BusinessInventory[]
+
+  @@index([userId])
+  @@map("businesses")
+}
+
+model BusinessInventory {
+  id          String   @id @default(uuid()) @db.Uuid
+  businessId  String   @map("business_id") @db.Uuid
+  productCode String   @map("product_code") @db.VarChar(32)
+  /// CHECK (quantity >= 0)
+  quantity    Int      @default(0)
+  /// ต้นทุนเฉลี่ยต่อชิ้น (หน่วย: Gold)
+  avgUnitCost Int      @default(0) @map("avg_unit_cost")
+  sellPrice   Int      @map("sell_price")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@unique([businessId, productCode])
+  @@map("business_inventory")
+}
+
+// ---------- Quests ----------
+
+model Quest {
+  id                  String             @id @db.VarChar(64)
+  category            QuestCategory
+  chapter             Int?
+  titleKey            String             @map("title_key") @db.VarChar(120)
+  descriptionKey      String             @map("description_key") @db.VarChar(120)
+  objectiveType       QuestObjectiveType @map("objective_type")
+  objectiveTarget     Int                @map("objective_target")
+  rewardGold          Int                @default(0) @map("reward_gold")
+  rewardGems          Int                @default(0) @map("reward_gems")
+  rewardXp            Int                @default(0) @map("reward_xp")
+  rewardItemId        String?            @map("reward_item_id") @db.VarChar(64)
+  minLevel            Int                @default(1) @map("min_level")
+  prerequisiteQuestId String?            @map("prerequisite_quest_id") @db.VarChar(64)
+  sortOrder           Int                @default(0) @map("sort_order")
+  isActive            Boolean            @default(true) @map("is_active")
+  createdAt           DateTime           @default(now()) @map("created_at")
+  updatedAt           DateTime           @updatedAt @map("updated_at")
+
+  progress QuestProgress[]
+
+  @@index([isActive, category])
+  @@map("quests")
+}
+
+model QuestProgress {
+  id          String      @id @default(uuid()) @db.Uuid
+  userId      String      @map("user_id") @db.Uuid
+  questId     String      @map("quest_id") @db.VarChar(64)
+  status      QuestStatus @default(IN_PROGRESS)
+  progress    Int         @default(0)
+  startedAt   DateTime    @default(now()) @map("started_at")
+  completedAt DateTime?   @map("completed_at")
+  claimedAt   DateTime?   @map("claimed_at")
+  updatedAt   DateTime    @updatedAt @map("updated_at")
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  quest Quest @relation(fields: [questId], references: [id])
+
+  @@unique([userId, questId])
+  @@index([userId, status])
+  @@map("quest_progress")
+}
+
+// ---------- Social & safety ----------
+
+/// เก็บ 2 แถวต่อความเป็นเพื่อน 1 คู่ (A->B และ B->A) เพื่อ query ง่าย
+model Friend {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  friendId  String   @map("friend_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user   User @relation("UserFriends", fields: [userId], references: [id], onDelete: Cascade)
+  friend User @relation("FriendOfUser", fields: [friendId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, friendId])
+  @@index([friendId])
+  @@map("friends")
+}
+
+model FriendRequest {
+  id          String              @id @default(uuid()) @db.Uuid
+  fromUserId  String              @map("from_user_id") @db.Uuid
+  toUserId    String              @map("to_user_id") @db.Uuid
+  status      FriendRequestStatus @default(PENDING)
+  createdAt   DateTime            @default(now()) @map("created_at")
+  respondedAt DateTime?           @map("responded_at")
+
+  fromUser User @relation("SentRequests", fields: [fromUserId], references: [id], onDelete: Cascade)
+  toUser   User @relation("ReceivedRequests", fields: [toUserId], references: [id], onDelete: Cascade)
+
+  @@unique([fromUserId, toUserId])
+  @@index([toUserId, status])
+  @@map("friend_requests")
+}
+
+model BlockedPlayer {
+  id        String   @id @default(uuid()) @db.Uuid
+  blockerId String   @map("blocker_id") @db.Uuid
+  blockedId String   @map("blocked_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+
+  blocker User @relation("Blocker", fields: [blockerId], references: [id], onDelete: Cascade)
+  blocked User @relation("Blocked", fields: [blockedId], references: [id], onDelete: Cascade)
+
+  @@unique([blockerId, blockedId])
+  @@index([blockedId])
+  @@map("blocked_players")
+}
+
+model ModerationReport {
+  id          String       @id @default(uuid()) @db.Uuid
+  reporterId  String       @map("reporter_id") @db.Uuid
+  reportedId  String       @map("reported_id") @db.Uuid
+  reason      ReportReason
+  /// ข้อความสำเร็จรูป/บริบทสั้น ๆ ไม่ใช่แชตอิสระ
+  contextCode String?      @map("context_code") @db.VarChar(64)
+  status      ReportStatus @default(OPEN)
+  resolvedBy  String?      @map("resolved_by") @db.VarChar(64)
+  resolvedAt  DateTime?    @map("resolved_at")
+  createdAt   DateTime     @default(now()) @map("created_at")
+  updatedAt   DateTime     @updatedAt @map("updated_at")
+
+  reporter User @relation("Reporter", fields: [reporterId], references: [id], onDelete: Cascade)
+  reported User @relation("Reported", fields: [reportedId], references: [id], onDelete: Cascade)
+
+  @@index([status, createdAt])
+  @@index([reportedId])
+  @@map("moderation_reports")
+}
+
+// ---------- Real-money purchases (Google Play Billing) ----------
+
+model Purchase {
+  id                String           @id @default(uuid()) @db.Uuid
+  userId            String           @map("user_id") @db.Uuid
+  provider          PurchaseProvider
+  productId         String           @map("product_id") @db.VarChar(100)
+  /// เก็บ hash ของ token เพื่อใช้ unique; token จริงเก็บเพื่อ query กับ Google
+  purchaseToken     String           @map("purchase_token") @db.Text
+  purchaseTokenHash String           @map("purchase_token_hash") @db.VarChar(64)
+  orderId           String?          @map("order_id") @db.VarChar(100)
+  status            PurchaseStatus   @default(PENDING)
+  isTest            Boolean          @default(false) @map("is_test")
+  grantedAt         DateTime?        @map("granted_at")
+  refundedAt        DateTime?        @map("refunded_at")
+  createdAt         DateTime         @default(now()) @map("created_at")
+  updatedAt         DateTime         @updatedAt @map("updated_at")
+
+  user   User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  events PurchaseEvent[]
+
+  @@unique([provider, purchaseTokenHash])
+  @@index([userId, createdAt])
+  @@index([orderId])
+  @@map("purchases")
+}
+
+model PurchaseEvent {
+  id         String   @id @default(uuid()) @db.Uuid
+  purchaseId String   @map("purchase_id") @db.Uuid
+  type       String   @db.VarChar(40)
+  payload    Json     @default("{}")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  purchase Purchase @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+
+  @@index([purchaseId, createdAt])
+  @@map("purchase_events")
+}
+
+model Subscription {
+  id                String             @id @default(uuid()) @db.Uuid
+  userId            String             @map("user_id") @db.Uuid
+  provider          PurchaseProvider
+  productId         String             @map("product_id") @db.VarChar(100)
+  purchaseTokenHash String             @map("purchase_token_hash") @db.VarChar(64)
+  status            SubscriptionStatus
+  startsAt          DateTime           @map("starts_at")
+  expiresAt         DateTime           @map("expires_at")
+  autoRenewing      Boolean            @default(false) @map("auto_renewing")
+  createdAt         DateTime           @default(now()) @map("created_at")
+  updatedAt         DateTime           @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, purchaseTokenHash])
+  @@index([userId, status, expiresAt])
+  @@map("subscriptions")
+}
+
+// ---------- Audit ----------
+
+model AuditLog {
+  id          String   @id @default(uuid()) @db.Uuid
+  /// null = ระบบ
+  actorUserId String?  @map("actor_user_id") @db.Uuid
+  action      String   @db.VarChar(60)
+  targetType  String?  @map("target_type") @db.VarChar(40)
+  targetId    String?  @map("target_id") @db.VarChar(120)
+  metadata    Json     @default("{}")
+  ipHash      String?  @map("ip_hash") @db.VarChar(64)
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([actorUserId, createdAt])
+  @@index([action, createdAt])
+  @@map("audit_logs")
+}

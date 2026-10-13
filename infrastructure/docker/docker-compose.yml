@@ -1,0 +1,61 @@
+# Local development stack: PostgreSQL + Redis (+ optional backend container).
+#   docker compose -f infrastructure/docker/docker-compose.yml up -d postgres redis
+#   docker compose -f infrastructure/docker/docker-compose.yml --profile app up -d --build
+name: happy-world-online
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-hwo}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-hwo_dev_password}
+      POSTGRES_DB: happy_world_dev
+    ports:
+      - "${HWO_PG_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./postgres-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-hwo} -d happy_world_dev"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "${HWO_REDIS_PORT:-6379}:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  backend:
+    profiles: ["app"]
+    build:
+      context: ../..
+      dockerfile: infrastructure/docker/backend.Dockerfile
+    environment:
+      NODE_ENV: development
+      PORT: 3000
+      DATABASE_URL: postgresql://${POSTGRES_USER:-hwo}:${POSTGRES_PASSWORD:-hwo_dev_password}@postgres:5432/happy_world_dev?schema=public
+      REDIS_URL: redis://redis:6379
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:-dev-only-access-secret-change-me-0123456789}
+      CORS_ORIGINS: http://localhost:3000
+      SWAGGER_ENABLED: "true"
+      BILLING_MODE: mock
+    ports:
+      - "${HWO_API_PORT:-3000}:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+volumes:
+  pgdata:
+  redisdata:

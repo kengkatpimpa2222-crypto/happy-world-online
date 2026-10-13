@@ -1,0 +1,22 @@
+node_modules/
+dist/
+coverage/
+*.log
+.env
+.env.*
+!.env.example
+!apps/backend/.env.test
+.DS_Store
+.idea/
+.vscode/
+# Unity
+apps/game-client/[Ll]ibrary/
+apps/game-client/[Tt]emp/
+apps/game-client/[Oo]bj/
+apps/game-client/[Bb]uild/
+apps/game-client/[Bb]uilds/
+apps/game-client/[Ll]ogs/
+apps/game-client/[Uu]ser[Ss]ettings/
+*.apk
+*.aab
+*.keystore
