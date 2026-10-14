@@ -127,3 +127,23 @@ curl -s -XPOST $API/festival/claim -H "authorization: Bearer $TOKEN" -H 'content
 
 ปฏิทินคำนวณจากนาฬิกาล้วน ๆ (`packages/shared-contracts/src/festival.ts`) ไม่ต้องตั้งค่าใน DB สำหรับทดสอบบนเครื่อง ตั้ง `FESTIVAL_CLOCK_OFFSET_HOURS` เพื่อเลื่อนปฏิทิน (ห้ามใช้ใน production ระบบไม่ยอมเปิด)
 
+## เมืองมีชีวิต (Phase 7)
+
+เมืองเดินตาม **เวลาจริงของกรุงเทพ**: กลางวัน/กลางคืน คนเดินตลาดตามชั่วโมง (เช้าเด็กไปโรงเรียน เที่ยงคนทำงาน ค่ำนักท่องเที่ยว ดึกเงียบ) ฤดูกาลไทย 3 ฤดู และอากาศที่เปลี่ยนทุก 3 ชั่วโมง (แดดดี / ร้อนจัด / ครึ้มฟ้า / ฝนตก) ทั้งหมดมีผลกับลูกค้า NPC เช่น ฝนตกคนน้อยลงแต่ลูกชิ้นปิ้งขายดี x1.5 และ **ทุกชิ้นที่ขายได้ในตลาด = 1 แต้มสร้างเมือง** แต้มของทั้งเมือง (แยกตามช่วงอายุ) สร้างโครงการตามลำดับ: สวนสาธารณะ 1,500 → ป้ายรถเมล์ 3,500 → โรงเรียน 7,000 → อาคารสำนักงาน 12,000 → หอนาฬิกา 20,000 สร้างเสร็จแล้วอยู่ถาวรและมีผลกับตลาดตั้งแต่วินาทีที่เสร็จ
+
+```bash
+curl -s $API/city/now -H "authorization: Bearer $TOKEN"
+# -> { now, hour: 14.08, clock: "14:05", phase: AFTERNOON, phaseTh, season: RAINY, seasonTh, weather: RAIN, weatherTh, tipTh,
+#      crowd: 0.7, busyTypes: ["STUDENT"], demand: [{ productCode: "MEATBALL", demand: 1.5 }, ...], nextChangeAt, forecast: [{ at, weather, weatherTh }] x4 }
+curl -s $API/city/growth -H "authorization: Bearer $TOKEN"
+# -> { points, builtCount, current: "BUS_STOP", projects: [{ code, nameKey, nameTh, effectTh, cost, zone, x, y, status: DONE|BUILDING|LOCKED, progress, completedAt }],
+#      me: { points, total }, top: [{ rank, displayName, points, isMe }] }
+```
+
+| Method | Path | หมายเหตุ |
+|---|---|---|
+| GET | `/city/now` | เวลา ช่วงของวัน ฤดู อากาศ คำแนะนำ สินค้าที่ขายดี/ขายยากในอากาศนี้ ลูกค้ากลุ่มที่มาเยอะช่วงนี้ และพยากรณ์ 4 ช่วงถัดไป |
+| GET | `/city/growth` | โครงการทั้งหมดของเมืองตัวเอง `top` = ช่างใหญ่ 5 อันดับของโครงการที่กำลังสร้าง กฎเดียวกับผู้ช่วยเทศกาล (ช่วงอายุเดียวกัน ไม่รวมคนที่บล็อกกัน ต่ำกว่า 13 ไม่เห็นชื่อคนอื่น) |
+
+`GET /city` และ `GET /city/players` เดิมทำงานเหมือนเดิม อากาศคำนวณจากนาฬิกา + hash (`packages/shared-contracts/src/city-time.ts`) ทุกเครื่องเห็นเหมือนกัน สำหรับทดสอบบนเครื่อง ตั้ง `CITY_WEATHER_OVERRIDE=RAIN` (หรือ SUNNY / HOT / CLOUDY) เพื่อบังคับอากาศ และ `FESTIVAL_CLOCK_OFFSET_HOURS` เลื่อนนาฬิกาเมืองไปพร้อมกับปฏิทินเทศกาล (ห้ามใช้ทั้งสองค่าใน production ระบบไม่ยอมเปิด)
+

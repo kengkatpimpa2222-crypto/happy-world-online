@@ -22,6 +22,7 @@ namespace HappyWorld.Unity.UI
         private RectTransform _banner;
         private Text _nameText, _moneyText, _zoneText, _cashText;
         private Text _festivalText;
+        private Text _cityText;
         private Image _festivalBg;
         private float _lastSaleToast = -999f;
 
@@ -205,6 +206,14 @@ namespace HappyWorld.Unity.UI
             _zoneText.gameObject.AddComponent<Shadow>();
             _zoneText.rectTransform.Place(new Vector2(0.38f, 0.9f), new Vector2(0.62f, 0.98f));
 
+            // Phase 7: Bangkok time of day, weather and season (tap for the forecast and the city's projects)
+            _cityText = UiKit.Label(_hud, "", 26, TextAnchor.UpperCenter, Color.white);
+            _cityText.gameObject.AddComponent<Shadow>();
+            _cityText.rectTransform.Place(new Vector2(0.34f, 0.765f), new Vector2(0.66f, 0.815f));
+            _cityText.raycastTarget = true; // labels are not tappable by default
+            var cityTap = _cityText.gameObject.AddComponent<Button>();
+            cityTap.onClick.AddListener(ShowCity);
+
             // Phase 6: this week's city festival (tap for goals and rewards)
             var fest = UiKit.Button(_hud, Texts.T("ui.festival"), new Color(1f, 0.84f, 0.31f, 0.92f), ShowFestival, 26);
             fest.GetComponent<RectTransform>().Place(new Vector2(0.36f, 0.82f), new Vector2(0.64f, 0.895f));
@@ -220,6 +229,7 @@ namespace HappyWorld.Unity.UI
                 ("ui.bag", ShowBag),
                 ("ui.store", ShowStore),
                 ("ui.shop", ShowShop),
+                ("ui.city", ShowCity),
                 ("ui.go_market", () => _s.Run(() => _s.JoinZoneAsync("MARKET"))),
             };
             for (int i = 0; i < buttons.Length; i++)
@@ -367,6 +377,61 @@ namespace HappyWorld.Unity.UI
                 UiKit.Row(list, "<b>ผู้ช่วยแห่งเมือง</b>", 60);
                 foreach (var h in f.top)
                     UiKit.Row(list, "<size=26>" + h.rank + ". " + FestivalPresenter.HelperName(h) + " · " + h.points + " ชิ้น</size>", 60);
+            }
+        }
+
+        // ---------- living city (Phase 7) ----------
+
+        /// <summary>HUD line under the zone name: "14:05 ช่วงบ่าย · ฝนตก · หน้าฝน".</summary>
+        public void SetCityLine(string line)
+        {
+            if (_cityText != null && _cityText.text != line) _cityText.text = line;
+        }
+
+        public void ShowCity()
+        {
+            var list = OpenModal(Texts.T("ui.city"));
+            Loading(list);
+            _s.Run(async () =>
+            {
+                var now = await _s.Api.GetCityNowAsync();
+                var g = await _s.Api.GetCityGrowthAsync();
+                _s.OnCityNow(now);
+                _s.OnCityGrowth(g);
+                UiKit.Clear(list);
+                FillCity(list, now, g);
+            });
+        }
+
+        private void FillCity(RectTransform list, CityNow n, CityGrowth g)
+        {
+            // time and weather: what it means for the shop right now
+            UiKit.Row(list, "<b>" + CityLifePresenter.HudLine(n, n.hour) + "</b>\n<size=24>" + n.tipTh + "</size>", 110);
+            var sells = n.demand.Where(d => d.demand >= 1.2f).Select(d => MarketNpcPlanner.ProductName(d.productCode)).ToList();
+            var busy = n.busyTypes.Select(MarketNpcPlanner.CustomerName).ToList();
+            var line = (sells.Count > 0 ? "ตอนนี้ขายดี: " + string.Join(", ", sells) : "อากาศแบบนี้ไม่มีของที่ขายดีเป็นพิเศษ") +
+                       (busy.Count > 0 ? "\nช่วงนี้มีลูกค้าเยอะ: " + string.Join(", ", busy) : "");
+            var shopRow = UiKit.Row(list, "<size=24>" + line + "\n" + CityLifePresenter.ForecastLine(n, 3) + "</size>", 120);
+            UiKit.RowButton(shopRow, "จัดร้าน", UiKit.Good, ShowShop, 150);
+
+            // the city's projects
+            UiKit.Row(list, "<b>เมืองของเราเติบโต</b>\n<size=24>ทุกชิ้นที่ขายได้ในตลาด = 1 แต้มสร้างเมือง · ทั้งเมืองมี " + g.points + " แต้ม · สร้างแล้ว " + g.builtCount + "/" + g.projects.Count + "</size>", 100);
+            foreach (var p in g.projects)
+            {
+                var state = p.Done ? "<color=#2E8B3E>สร้างเสร็จแล้ว</color>" : p.Building ? "กำลังสร้าง " + p.progress + "/" + p.cost : "<color=#888888>รอคิว (" + p.cost + " แต้ม)</color>";
+                var row = UiKit.Row(list, "<b>" + CityLifePresenter.ProjectName(p) + "</b>  <size=24>" + state + " · " + Texts.T("zone." + p.zone.ToLowerInvariant()) + "</size>\n<size=24>" + p.effectTh + "</size>", 110);
+                if (p.Building)
+                {
+                    var track = UiKit.Box("Track", row, new Color(0.88f, 0.88f, 0.9f)).rectTransform.Place(new Vector2(0, 0), new Vector2(1, 0), new Vector2(20, 6), new Vector2(-20, 20));
+                    UiKit.Box("Fill", track, new Color(0.95f, 0.65f, 0.2f)).rectTransform.Place(Vector2.zero, new Vector2(CityLifePresenter.Progress(p), 1));
+                }
+            }
+            UiKit.Row(list, "<size=26>คุณช่วยสร้างเมืองไปแล้ว <b>" + g.me.total + "</b> แต้ม" + (g.current != null ? " (โครงการนี้ " + g.me.points + ")" : "") + "</size>", 70);
+            if (g.top.Count > 0)
+            {
+                UiKit.Row(list, "<b>ช่างใหญ่ของเมือง</b>", 60);
+                foreach (var h in g.top)
+                    UiKit.Row(list, "<size=26>" + h.rank + ". " + FestivalPresenter.HelperName(h) + " · " + h.points + " แต้ม</size>", 60);
             }
         }
 
@@ -666,6 +731,8 @@ namespace HappyWorld.Unity.UI
                 var code = c.productCode;
                 var hint = FestivalPresenter.ProductHint(_s.Festival != null ? _s.Festival.current : null, code);
                 if (hint.Length > 0) name += " <color=#D35400><size=22>" + hint + "</size></color>";
+                var weatherHint = CityLifePresenter.ProductHint(_s.CityNow, code);
+                if (weatherHint.Length > 0) name += " <color=#2471A3><size=22>" + weatherHint + "</size></color>";
                 var row = UiKit.Row(list,
                     "<b>" + name + "</b>  ขาย " + price + " ทอง <size=22>(ราคาตลาด " + c.basePrice + " · ต้นทุน " + cost + " · " + (margin > 0 ? "กำไร " + margin : "<color=#C0392B>ขาดทุน " + (-margin) + "</color>") + "/ชิ้น)</size>\n" +
                     "<size=24>คลัง " + storage + "/" + b.stockCapacity + " · บนแผง " + shelf + "/" + st.shelfCapacity + (p != null && p.onStall ? "" : " · ยังไม่ได้วางขาย") + "</size>", 120);

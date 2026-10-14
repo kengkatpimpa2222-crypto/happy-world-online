@@ -56,6 +56,15 @@ Schema: [`apps/backend/prisma/schema.prisma`](../apps/backend/prisma/schema.pris
 - CHECK: แต้มไม่ติดลบ, `tier` 1-3
 - ไม่มีตารางปฏิทิน: เทศกาลของแต่ละสัปดาห์คำนวณจากเวลา `festival_key` เช่น `BAKERY-41` = งานขนมอบ สัปดาห์ที่ 41 นับจาก 5 ม.ค. 2026
 
+## Migration ของ Phase 7 (`*_phase7_city_growth`)
+
+- เพิ่มอย่างเดียว ไม่แตะตารางเดิม
+- `city_growth` (PK `age_band`): แต้มสร้างเมืองรวมของแต่ละเมือง ทุกชิ้นที่ร้านในตลาดขายได้ = 1 แต้ม บวกใน transaction เดียวกับการคิดบัญชีร้าน (lock แผง → แถวเทศกาล → แถวเมือง ลำดับเดียวกันเสมอ)
+- `city_project_completions` (PK `age_band, project_code`): โครงการที่สร้างเสร็จพร้อม `completed_at` ผลกับตลาดเริ่มจากเวลานี้ (การคิดบัญชีย้อนหลังของร้านที่ออฟไลน์จะไม่ได้ผลก่อนเวลาที่สร้างเสร็จ)
+- `city_builder_contributions` (PK `project_code, user_id`): แต้มที่ผู้เล่นแต่ละคนช่วยสร้างแต่ละโครงการ ถ้าการขายรอบเดียวคร่อมสองโครงการ แต้มจะถูกแบ่งให้ถูกโครงการ
+- CHECK: แต้มไม่ติดลบ
+- ไม่มีตารางอากาศหรือรายการโครงการ: อากาศคำนวณจากเวลา รายการโครงการอยู่ใน `packages/shared-contracts/src/city-growth.ts`
+
 ## ข้อควรรู้
 
 - `wallet_transactions` ลบไม่ได้โดยออกแบบ การลบบัญชีผู้เล่น (สิทธิ์ตาม PDPA) ให้ทำแบบ anonymize/soft delete (`users.status = DELETED`, ล้างอีเมลและชื่อ) แทนการ hard delete

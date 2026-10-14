@@ -107,6 +107,13 @@ namespace HappyWorld.Core.Localization
             ["ui.festival"] = "เทศกาล",
             ["ui.festival_claim"] = "รับรางวัล",
             ["ui.festival_claimed"] = "รับแล้ว",
+            ["ui.city"] = "เมืองของเรา",
+            // city projects (packages/shared-contracts/src/city-growth.ts)
+            ["project.park"] = "สวนสาธารณะ",
+            ["project.bus_stop"] = "ป้ายรถเมล์หน้าตลาด",
+            ["project.school"] = "โรงเรียนประจำเมือง",
+            ["project.office"] = "อาคารสำนักงาน",
+            ["project.clock_tower"] = "หอนาฬิกากลางเมือง",
 
             // city festivals (packages/shared-contracts/src/festival.ts)
             ["festival.cool_summer"] = "เทศกาลคลายร้อน",

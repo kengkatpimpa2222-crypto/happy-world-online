@@ -115,18 +115,29 @@ namespace HappyWorld.Unity.World
             return portals;
         }
 
+        /// <summary>Random decoration sits in a "Deco" group so city projects (Phase 7) can make room.</summary>
+        private static Transform Deco(Transform root, Vector3 pos)
+        {
+            var g = new GameObject("Deco").transform;
+            g.SetParent(root, false);
+            g.localPosition = pos;
+            return g;
+        }
+
         private static void Tree(Transform root, Vector3 pos)
         {
-            Prim(PrimitiveType.Cylinder, root, pos + Vector3.up * 0.75f, new Vector3(0.3f, 0.75f, 0.3f), new Color(0.45f, 0.30f, 0.2f));
-            Prim(PrimitiveType.Sphere, root, pos + Vector3.up * 2f, new Vector3(1.6f, 1.6f, 1.6f), new Color(0.25f, 0.6f, 0.3f));
+            var d = Deco(root, pos);
+            Prim(PrimitiveType.Cylinder, d, Vector3.up * 0.75f, new Vector3(0.3f, 0.75f, 0.3f), new Color(0.45f, 0.30f, 0.2f));
+            Prim(PrimitiveType.Sphere, d, Vector3.up * 2f, new Vector3(1.6f, 1.6f, 1.6f), new Color(0.25f, 0.6f, 0.3f));
         }
 
         private static void House(Transform root, Vector3 pos, System.Random rnd)
         {
+            var d = Deco(root, pos);
             var colors = new[] { new Color(1f, 0.8f, 0.7f), new Color(0.7f, 0.85f, 1f), new Color(1f, 0.95f, 0.7f), new Color(0.85f, 1f, 0.8f) };
             var body = colors[rnd.Next(colors.Length)];
-            Prim(PrimitiveType.Cube, root, pos + Vector3.up * 1.25f, new Vector3(3f, 2.5f, 3f), body);
-            var roof = Prim(PrimitiveType.Cube, root, pos + Vector3.up * 2.9f, new Vector3(2.3f, 2.3f, 3.2f), new Color(0.8f, 0.35f, 0.3f));
+            Prim(PrimitiveType.Cube, d, Vector3.up * 1.25f, new Vector3(3f, 2.5f, 3f), body);
+            var roof = Prim(PrimitiveType.Cube, d, Vector3.up * 2.9f, new Vector3(2.3f, 2.3f, 3.2f), new Color(0.8f, 0.35f, 0.3f));
             roof.transform.localRotation = Quaternion.Euler(0, 0, 45);
         }
 

@@ -553,4 +553,96 @@ namespace HappyWorld.Core.Api
         public bool inZone;
         public List<RemotePlayerInfo> players = new List<RemotePlayerInfo>();
     }
+    // ---------- Living city (Phase 7) ----------
+
+    public sealed class CityDemand
+    {
+        public string productCode;
+        /// <summary>how much more (or less) customers want it in this weather</summary>
+        public float demand;
+    }
+
+    public sealed class CityForecast
+    {
+        public DateTime at;
+        public string weather;
+        public string weatherTh;
+    }
+
+    /// <summary>GET /city/now — Bangkok time of day, season and weather.</summary>
+    public sealed class CityNow
+    {
+        public DateTime now;
+        /// <summary>Bangkok hour 0..23.999</summary>
+        public float hour;
+        public string clock;
+        /// <summary>NIGHT, DAWN, MORNING, NOON, AFTERNOON or EVENING</summary>
+        public string phase;
+        public string phaseTh;
+        /// <summary>HOT, RAINY or COOL</summary>
+        public string season;
+        public string seasonTh;
+        /// <summary>SUNNY, HOT, CLOUDY or RAIN</summary>
+        public string weather;
+        public string weatherTh;
+        public string tipTh;
+        /// <summary>how busy the market is compared to an ordinary hour (1 = normal)</summary>
+        public float crowd;
+        public List<string> busyTypes = new List<string>();
+        public List<CityDemand> demand = new List<CityDemand>();
+        public DateTime nextChangeAt;
+        public List<CityForecast> forecast = new List<CityForecast>();
+
+        public float DemandOf(string productCode)
+        {
+            foreach (var d in demand) if (d.productCode == productCode) return d.demand;
+            return 1f;
+        }
+    }
+
+    public sealed class CityProject
+    {
+        public string code;
+        public string nameKey;
+        public string nameTh;
+        public string effectTh;
+        public int cost;
+        public string zone;
+        public float x;
+        public float y;
+        /// <summary>DONE, BUILDING or LOCKED</summary>
+        public string status;
+        public int progress;
+        public DateTime? completedAt;
+
+        public bool Done => status == "DONE";
+        public bool Building => status == "BUILDING";
+    }
+
+    public sealed class CityBuilderMe
+    {
+        /// <summary>points I gave to the project being built</summary>
+        public int points;
+        /// <summary>points I gave to every project so far</summary>
+        public int total;
+    }
+
+    /// <summary>GET /city/growth — the city's public projects.</summary>
+    public sealed class CityGrowth
+    {
+        public int points;
+        public int builtCount;
+        /// <summary>code of the project being built, null when all are done</summary>
+        public string current;
+        public List<CityProject> projects = new List<CityProject>();
+        public CityBuilderMe me = new CityBuilderMe();
+        /// <summary>same shape and child-safety rules as the festival helpers</summary>
+        public List<FestivalHelper> top = new List<FestivalHelper>();
+
+        public CityProject Current()
+        {
+            foreach (var p in projects) if (p.Building) return p;
+            return null;
+        }
+    }
 }

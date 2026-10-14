@@ -105,6 +105,19 @@ namespace HappyWorld.Core.Realtime
         public List<ShopStallLine> stall = new List<ShopStallLine>();
         /// <summary>Phase 6: featured units in this update that counted for the city festival.</summary>
         public int festivalPoints;
+        /// <summary>Phase 7: build points this update gave the city (every unit sold).</summary>
+        public int cityPoints;
+    }
+
+    /// <summary>city:growth — the whole city (same age band) finished a public project.</summary>
+    public sealed class CityGrowthEvent
+    {
+        public string projectCode;
+        public string nameTh;
+        public string effectTh;
+        public int index;
+        public int points;
+        public string next;
     }
 
     /// <summary>festival:milestone — the whole city (same age band) reached a festival tier.</summary>
@@ -143,6 +156,7 @@ namespace HappyWorld.Core.Realtime
         public event Action<int> MarketStallChanged;     // slot
         public event Action<ShopUpdated> ShopUpdated;
         public event Action<FestivalMilestone> FestivalMilestone;
+        public event Action<CityGrowthEvent> CityGrowth;
         public event Action<string> ConnectError;
         public event Action<string> Disconnected;
 
@@ -170,6 +184,7 @@ namespace HappyWorld.Core.Realtime
             _io.On("market:stall", p => MarketStallChanged?.Invoke((int?)p?["slot"] ?? -1));
             _io.On("shop:updated", p => ShopUpdated?.Invoke(p.ToObject<ShopUpdated>()));
             _io.On("festival:milestone", p => FestivalMilestone?.Invoke(p.ToObject<FestivalMilestone>()));
+            _io.On("city:growth", p => CityGrowth?.Invoke(p.ToObject<CityGrowthEvent>()));
         }
 
         /// <summary>Opens the socket. Completion means the TCP/WebSocket is open; wait for <see cref="Ready"/> before joining a zone.</summary>
