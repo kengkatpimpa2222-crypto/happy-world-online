@@ -30,16 +30,23 @@ namespace HappyWorld.Unity.World
         private static readonly Dictionary<Color, Material> Cache = new Dictionary<Color, Material>();
 
         /// <summary>
-        /// Coloured copy of the built-in primitive material. Using the primitive's own material guarantees its
-        /// shader ships in the player build (Shader.Find can return null on device for unreferenced shaders).
+        /// Coloured material on "Legacy Shaders/Diffuse", which ProjectSetup adds to Always Included Shaders.
+        /// The primitive's own Default-Material (Standard) is not referenced by any asset, so the build strips
+        /// Standard and everything rendered magenta on device (Phase 4.5); Diffuse is also far cheaper on mobile.
         /// </summary>
         public static Material Mat(Color c)
         {
             if (_baseMat == null)
             {
-                var probe = GameObject.CreatePrimitive(PrimitiveType.Cube);
-                _baseMat = probe.GetComponent<Renderer>().sharedMaterial;
-                Object.Destroy(probe);
+                var shader = Shader.Find("Legacy Shaders/Diffuse");
+                if (shader != null) _baseMat = new Material(shader);
+                else
+                {
+                    Debug.LogWarning("[HappyWorld] Legacy Shaders/Diffuse missing from build; using primitive material");
+                    var probe = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                    _baseMat = probe.GetComponent<Renderer>().sharedMaterial;
+                    Object.Destroy(probe);
+                }
             }
             Material m;
             if (Cache.TryGetValue(c, out m)) return m;

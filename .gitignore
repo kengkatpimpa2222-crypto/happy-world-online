@@ -24,3 +24,5 @@ apps/game-client/Tests/**/bin/
 apps/game-client/Tests/**/obj/
 apps/game-client/*.csproj
 apps/game-client/*.sln
+apps/game-client/.utmp/
+apps/game-client/*.slnx
