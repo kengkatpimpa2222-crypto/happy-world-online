@@ -3,9 +3,12 @@ import {
   BUSINESS_PRODUCTS,
   BusinessProductCode,
   businessLevelConfig,
+  CityProjectDef,
+  crowdMix,
   FESTIVAL_CUSTOMER_RATE,
   festivalDemand,
   FestivalWeek,
+  HOURLY_CROWD,
   NPC_BARGAIN_PRICE_RATIO,
   NPC_CUSTOMER_TYPE_CODES,
   NPC_CUSTOMER_TYPES,
@@ -13,6 +16,8 @@ import {
   NpcCustomerType,
   NpcCustomerTypeCode,
   NpcVisitOutcome,
+  Weather,
+  WEATHER_EFFECTS,
 } from '@hwo/shared-contracts';
 
 /** One product line on the market stall. */
@@ -68,8 +73,18 @@ export interface SimulationResult {
   festivalPoints: Record<string, number>;
 }
 
-/** Which festival (if any) is running in a given tick. */
-export type FestivalAt = (tick: number) => FestivalWeek | null;
+/**
+ * What the city is like during one tick (Phase 6 festival, Phase 7 time of day, weather and finished
+ * city projects). Missing fields = no effect, so `() => null` is exactly the Phase 5 market.
+ */
+export interface TickWorld {
+  festival?: FestivalWeek | null;
+  /** Bangkok hour 0..23.99 */
+  hour?: number;
+  weather?: Weather;
+  built?: readonly CityProjectDef[];
+}
+export type WorldAt = (tick: number) => TickWorld | null;
 
 // ---------- deterministic randomness ----------
 
@@ -142,7 +157,7 @@ export function simulateCustomers(
   fromTick: number,
   toTick: number,
   stallIn: readonly StallLine[],
-  festivalAt: FestivalAt = () => null,
+  worldAt: WorldAt = () => null,
 ): SimulationResult {
   const stall = stallIn.map((l) => ({ ...l }));
   const visits: CustomerVisit[] = [];
@@ -156,16 +171,27 @@ export function simulateCustomers(
 
   for (let tick = fromTick + 1; tick <= toTick; tick++) {
     const rng = seededRandom(`${seed}:${tick}`);
-    const fest = festivalAt(tick);
-    const count = arrivals(rng, customersPerMinute * (fest ? FESTIVAL_CUSTOMER_RATE : 1));
+    const world = worldAt(tick) ?? {};
+    const fest = world.festival ?? null;
+    const built = world.built ?? [];
+    const mix = world.hour !== undefined ? crowdMix(world.hour) : {};
+    const weather = world.weather ? WEATHER_EFFECTS[world.weather] : null;
+    let crowd = fest ? FESTIVAL_CUSTOMER_RATE : 1;
+    if (world.hour !== undefined) crowd *= HOURLY_CROWD[Math.floor(world.hour) % 24]!;
+    if (weather) crowd *= weather.crowd;
+    for (const b of built) crowd *= b.crowd ?? 1;
+    const count = arrivals(rng, customersPerMinute * crowd);
     for (let index = 0; index < count; index++) {
       const typeCode = pickWeighted(rng, NPC_CUSTOMER_TYPE_CODES, (c) => {
         const t = NPC_CUSTOMER_TYPES[c] as NpcCustomerType;
-        return fest ? (t.festivalWeight ?? t.weight) : t.weight;
+        let w = (fest ? (t.festivalWeight ?? t.weight) : t.weight) * (mix[c] ?? 1);
+        for (const b of built) w *= b.typeBoost?.[c] ?? 1;
+        return w;
       });
       const type = NPC_CUSTOMER_TYPES[typeCode];
       const likes = type.likes as Partial<Record<BusinessProductCode, number>>;
-      const like = (c: BusinessProductCode) => (likes[c] ?? 1) * BUSINESS_PRODUCTS[c].baseDemand * festivalDemand(fest?.festival, c);
+      const like = (c: BusinessProductCode) =>
+        (likes[c] ?? 1) * BUSINESS_PRODUCTS[c].baseDemand * festivalDemand(fest?.festival, c) * (weather?.demand[c] ?? 1);
       // Always draw the same number of random values per customer so one customer's choice
       // never shifts the next customer's dice.
       const wantsUnlisted = rng() < NPC_WANTS_UNLISTED_CHANCE;

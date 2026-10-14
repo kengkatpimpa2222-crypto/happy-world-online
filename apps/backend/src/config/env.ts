@@ -31,6 +31,8 @@ export const envSchema = z.object({
    * Must be 0 in production.
    */
   FESTIVAL_CLOCK_OFFSET_HOURS: z.coerce.number().min(-24 * 7 * 52).max(24 * 7 * 52).default(0),
+  /** Dev/QA only (Phase 7): force the city weather (SUNNY | HOT | CLOUDY | RAIN). Empty = real weather. */
+  CITY_WEATHER_OVERRIDE: z.preprocess((v) => (v === '' ? undefined : v), z.enum(['SUNNY', 'HOT', 'CLOUDY', 'RAIN']).optional()),
 });
 
 export type Env = z.infer<typeof envSchema>;
@@ -48,6 +50,7 @@ export function validateEnv(raw: Record<string, unknown>): Env {
       throw new Error('JWT_ACCESS_SECRET looks like a development placeholder');
     }
     if (env.FESTIVAL_CLOCK_OFFSET_HOURS !== 0) throw new Error('FESTIVAL_CLOCK_OFFSET_HOURS must be 0 in production');
+    if (env.CITY_WEATHER_OVERRIDE) throw new Error('CITY_WEATHER_OVERRIDE is not allowed in production');
   }
   return env;
 }

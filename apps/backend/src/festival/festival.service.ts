@@ -1,7 +1,6 @@
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { AgeBand } from '@prisma/client';
 import {
-  activeFestival,
   ErrorCode,
   FESTIVAL_MAIN_DEMAND,
   FESTIVAL_MIN_CONTRIBUTION,
@@ -13,7 +12,6 @@ import {
   festivalWeekIndex,
   FestivalWeek,
   levelForXp,
-  SHOP_TICK_SECONDS,
   WsEvent,
 } from '@hwo/shared-contracts';
 import { AppException } from '../common/app-exception';
@@ -68,9 +66,6 @@ export class FestivalService {
   nowMs(): number {
     return Date.now() + this.clockOffsetMs;
   }
-
-  /** The festival running during a shop tick (used by the NPC customer simulation). */
-  readonly festivalAtTick = (tick: number): FestivalWeek | null => activeFestival(tick * SHOP_TICK_SECONDS * 1000 + this.clockOffsetMs);
 
   // ---------- contributions (called inside the shop settlement transaction) ----------
 

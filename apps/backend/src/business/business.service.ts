@@ -17,7 +17,7 @@ import { PrismaService, Tx } from '../prisma/prisma.service';
 import { QuestsService } from '../quests/quests.service';
 import { WalletService } from '../wallet/wallet.service';
 import { SALE_TIP_TEXT_TH, simulateSaleRound, weightedAvgCost } from './business-sim';
-import { LivingShopService } from './living-shop.service';
+import { LivingShopService, SettleResult } from './living-shop.service';
 
 /**
  * Simulated shop. Uses in-game Gold only; it is a learning simulation, not an investment product.
@@ -65,8 +65,9 @@ export class BusinessService {
         max: p.maxPrice,
       });
     }
+    const settled: SettleResult[] = [];
     await this.prisma.tx(async (tx) => {
-      const biz = await this.lock(tx, userId, id);
+      const biz = await this.lock(tx, userId, id, settled);
       this.assertUnlocked(code, biz.level);
       await tx.businessInventory.upsert({
         where: { businessId_productCode: { businessId: id, productCode: code } },
@@ -74,6 +75,7 @@ export class BusinessService {
         update: { sellPrice: dto.price },
       });
     });
+    settled.forEach((r) => this.shop.publish(r));
     return this.get(userId, id);
   }
 
@@ -82,8 +84,9 @@ export class BusinessService {
     const product = BUSINESS_PRODUCTS[code];
     const cost = product.unitCost * dto.quantity;
 
+    const settled: SettleResult[] = [];
     const replayed = await this.prisma.tx(async (tx) => {
-      const biz = await this.lock(tx, userId, id);
+      const biz = await this.lock(tx, userId, id, settled);
       this.assertUnlocked(code, biz.level);
       const line = await tx.businessInventory.findUnique({ where: { businessId_productCode: { businessId: id, productCode: code } } });
 
@@ -116,14 +119,16 @@ export class BusinessService {
       await this.quests.recordEvent(tx, userId, 'BUSINESS_RESTOCK', dto.quantity);
       return false;
     });
+    settled.forEach((r) => this.shop.publish(r));
     return { replayed, cost, business: await this.get(userId, id) };
   }
 
   /** Runs one sales round. Revenue is computed entirely on the server from stored price and stock. */
   async sell(userId: string, id: string) {
     const cooldown = this.config.get('BUSINESS_SALE_COOLDOWN_SECONDS');
+    const settled: SettleResult[] = [];
     const summary = await this.prisma.tx(async (tx) => {
-      const biz = await this.lock(tx, userId, id);
+      const biz = await this.lock(tx, userId, id, settled);
       const now = new Date();
       if (biz.lastSaleAt && cooldown > 0) {
         const readyAt = biz.lastSaleAt.getTime() + cooldown * 1000;
@@ -179,13 +184,15 @@ export class BusinessService {
         nextSaleAvailableAt: new Date(now.getTime() + cooldown * 1000).toISOString(),
       };
     });
+    settled.forEach((r) => this.shop.publish(r));
     return { ...summary, business: await this.get(userId, id) };
   }
 
   /** Upgrades one level. `expectedLevel` + a deterministic ledger key make double-taps harmless. */
   async upgrade(userId: string, id: string, expectedLevel: number) {
+    const settled: SettleResult[] = [];
     const replayed = await this.prisma.tx(async (tx) => {
-      const biz = await this.lock(tx, userId, id);
+      const biz = await this.lock(tx, userId, id, settled);
       const idempotencyKey = `business-upgrade:${id}:${expectedLevel + 1}`;
       if (biz.level !== expectedLevel) {
         const done = await tx.walletTransaction.findUnique({ where: { userId_idempotencyKey: { userId, idempotencyKey } } });
@@ -213,16 +220,20 @@ export class BusinessService {
       await this.audit.log({ actorUserId: userId, action: 'business.upgraded', targetType: 'business', targetId: id, metadata: { toLevel: biz.level + 1, cost: cfg.upgradeCost } }, tx);
       return false;
     });
+    settled.forEach((r) => this.shop.publish(r));
     return { replayed, business: await this.get(userId, id) };
   }
 
   /**
    * Locks the shop row and first settles any NPC customers that are due, so the change being made
-   * (price, stock, level) never applies retroactively to customers who already came.
+   * (price, stock, level) never applies retroactively to customers who already came. What the settle
+   * produced goes to `settled` and is published by the caller once the transaction has committed.
    */
-  private async lock(tx: Tx, userId: string, id: string) {
+  private async lock(tx: Tx, userId: string, id: string, settled: SettleResult[]) {
     const shop = await this.shop.lock(tx, userId, id);
-    await this.shop.settleLocked(tx, shop);
+    settled.length = 0; // a retried transaction starts over
+    const res = await this.shop.settleLocked(tx, shop);
+    if (res) settled.push(res);
     return { id: shop.id, level: shop.level, lastSaleAt: shop.lastSaleAt };
   }
 

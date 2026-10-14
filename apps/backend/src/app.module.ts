@@ -4,6 +4,7 @@ import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { AuditModule } from './audit/audit.module';
 import { AuthModule } from './auth/auth.module';
 import { BusinessModule } from './business/business.module';
+import { CityLifeModule } from './city-life/city-life.module';
 import { FestivalModule } from './festival/festival.module';
 import { AppConfig } from './config/app-config.service';
 import { AppConfigModule } from './config/config.module';
@@ -45,6 +46,7 @@ import { WalletModule } from './wallet/wallet.module';
     PurchasesModule,
     BusinessModule,
     FestivalModule,
+    CityLifeModule,
     RealtimeModule,
     SocialModule,
   ],

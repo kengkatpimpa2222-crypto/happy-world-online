@@ -68,7 +68,7 @@ describe('festival calendar', () => {
 describe('festival in the NPC customer simulation', () => {
   // COOL_SUMMER: lemonade is the craving, Thai tea the side product
   const coolSummer = festivalWeek(FESTIVALS.findIndex((f) => f.code === 'COOL_SUMMER'));
-  const always = () => coolSummer;
+  const always = () => ({ festival: coolSummer });
   const stall = (): StallLine[] => [
     { productCode: 'BREAD', shelfQuantity: 100_000, avgUnitCost: 8, sellPrice: 12 },
     { productCode: 'LEMONADE', shelfQuantity: 100_000, avgUnitCost: 5, sellPrice: 8 },
@@ -86,7 +86,7 @@ describe('festival in the NPC customer simulation', () => {
 
   it('counts only featured units sold while the festival runs, under its key', () => {
     // festival only during ticks 1500-2999
-    const half = (tick: number) => (tick >= 1500 ? coolSummer : null);
+    const half = (tick: number) => ({ festival: tick >= 1500 ? coolSummer : null });
     const r = simulateCustomers('shop-g', 1, 0, 3000, stall(), half);
     const featuredDuring = r.visits.filter((v) => v.tick >= 1500 && v.productCode === 'LEMONADE').reduce((a, v) => a + v.quantity, 0);
     expect(featuredDuring).toBeGreaterThan(0);

@@ -172,6 +172,7 @@ model User {
   reportsMade           ModerationReport[]     @relation("Reporter")
   reportsReceived       ModerationReport[]     @relation("Reported")
   festivalContributions FestivalContribution[]
+  cityBuilds            CityBuilderContribution[]
   festivalClaims        FestivalRewardClaim[]
 
   @@index([deviceIdHash])
@@ -664,4 +665,42 @@ model AuditLog {
   @@index([actorUserId, createdAt])
   @@index([action, createdAt])
   @@map("audit_logs")
+}
+
+/// Phase 7: แต้มสร้างเมืองสะสมของแต่ละเมือง (หนึ่งเมืองต่อช่วงอายุ) ทุกชิ้นที่ขายได้ในตลาด = 1 แต้ม
+model CityGrowth {
+  ageBand   AgeBand  @id @map("age_band")
+  /// CHECK (points >= 0)
+  points    Int      @default(0)
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("city_growth")
+}
+
+/// Phase 7: โครงการเมืองที่สร้างเสร็จแล้ว (อยู่ถาวร มีผลกับตลาดตั้งแต่ completed_at)
+model CityProjectCompletion {
+  ageBand     AgeBand  @map("age_band")
+  projectCode String   @map("project_code") @db.VarChar(30)
+  completedAt DateTime @default(now()) @map("completed_at")
+
+  @@id([ageBand, projectCode])
+  @@map("city_project_completions")
+}
+
+/// Phase 7: ผู้เล่นแต่ละคนช่วยสร้างโครงการไหนไปกี่แต้ม
+model CityBuilderContribution {
+  projectCode String   @map("project_code") @db.VarChar(30)
+  userId      String   @map("user_id") @db.Uuid
+  ageBand     AgeBand  @map("age_band")
+  /// CHECK (points >= 0)
+  points      Int      @default(0)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([projectCode, userId])
+  @@index([projectCode, ageBand, points(sort: Desc)])
+  @@index([userId])
+  @@map("city_builder_contributions")
 }

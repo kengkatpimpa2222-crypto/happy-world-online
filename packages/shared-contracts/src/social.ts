@@ -173,5 +173,8 @@ export const WsEvent = {
   // Phase 6: city festivals
   /** the city (age band) reached a festival tier: every zone of that age band */
   FESTIVAL_MILESTONE: 'festival:milestone',
+  // Phase 7: time dimension
+  /** a city project was finished: every zone of that age band (clients add the building) */
+  CITY_GROWTH: 'city:growth',
   ERROR: 'error:app',
 } as const;
