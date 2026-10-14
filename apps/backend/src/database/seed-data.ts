@@ -52,6 +52,9 @@ export const QUESTS: {
   // business growth
   { id: 'biz_first_profit', category: 'BUSINESS', objectiveType: 'BUSINESS_EARN_PROFIT', objectiveTarget: 100, rewardGold: 200, rewardXp: 60 },
   { id: 'biz_upgrade_shop', category: 'BUSINESS', objectiveType: 'BUSINESS_UPGRADE', objectiveTarget: 1, rewardGold: 100, rewardGems: 5, rewardXp: 80 },
+  // living shop (Phase 5)
+  { id: 'shop_open_stall', category: 'BUSINESS', objectiveType: 'SHOP_OPEN', objectiveTarget: 1, rewardGold: 100, rewardXp: 30 },
+  { id: 'shop_serve_customers', category: 'BUSINESS', objectiveType: 'SHOP_SERVE_CUSTOMERS', objectiveTarget: 15, rewardGold: 150, rewardXp: 50, prerequisiteQuestId: 'shop_open_stall' },
   // home
   { id: 'home_first_furniture', category: 'HOME', objectiveType: 'PLACE_FURNITURE', objectiveTarget: 1, rewardGold: 80, rewardXp: 20 },
   // co-op & life skill

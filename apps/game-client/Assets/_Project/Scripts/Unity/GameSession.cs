@@ -44,6 +44,10 @@ namespace HappyWorld.Unity
         private int _autoRetries;
         private float _joinedAt;
         private string _wantZone = "PLAZA";
+        private MarketView _market;
+        private float _marketRefreshAt = -1f;
+        private bool _marketLoading;
+        private const float MarketResyncSeconds = 30f;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Boot()
@@ -237,6 +241,16 @@ namespace HappyWorld.Unity
             if (_local == null) SpawnLocalPlayer();
             _ui.ShowHud();
             await ConnectRealtimeAsync();
+            Run(ShowWelcomeBackReportAsync);
+        }
+
+        /// <summary>Living shop: if customers came while the player was away, show what happened.</summary>
+        private async Task ShowWelcomeBackReportAsync()
+        {
+            var shops = await Api.GetBusinessesAsync();
+            if (shops.Count == 0 || shops[0].stall == null || (shops[0].stall.status == "CLOSED" && shops[0].stall.cashBox == 0)) return;
+            var report = await Api.GetShopReportAsync(shops[0].id);
+            if (report.hasNews && !_ui.ModalOpen) _ui.ShowShopReport(report, true);
         }
 
         private void SpawnLocalPlayer()
@@ -279,6 +293,15 @@ namespace HappyWorld.Unity
             Rt.FriendOnline += id => MarkFriend(id, true);
             Rt.FriendInvited += inv => _ui.Toast(inv.displayName + " ชวนคุณไป " + Texts.T("zone." + (inv.zone ?? "plaza").ToLowerInvariant()),
                 "ไปเลย", () => Run(() => JoinZoneAsync(inv.zone ?? "PLAZA")));
+            Rt.MarketActivity += a =>
+            {
+                if (_market != null) _market.OnActivity(a);
+            };
+            Rt.MarketStallChanged += _ =>
+            {
+                if (_market != null) _marketRefreshAt = Time.time + 0.8f; // batch several changes into one GET
+            };
+            Rt.ShopUpdated += u => _ui.OnShopUpdated(u);
             Rt.SessionReplaced += () =>
             {
                 _replaced = true;
@@ -341,7 +364,13 @@ namespace HappyWorld.Unity
         {
             CurrentZone = Layout.zones.FirstOrDefault(z => z.id == s.zone);
             if (CurrentZone == null) return;
-            _portals = CityBuilder.Build(CurrentZone, _zoneRoot);
+            _portals = CityBuilder.Build(CurrentZone, _zoneRoot); // also removes the previous zone's market view
+            _market = null;
+            if (CurrentZone.id == "MARKET")
+            {
+                _market = MarketView.Create(_zoneRoot);
+                RefreshMarket();
+            }
             _local.Width = CurrentZone.width;
             _local.Height = CurrentZone.height;
             _local.Teleport(s.you.x, s.you.y);
@@ -378,6 +407,26 @@ namespace HappyWorld.Unity
                 p.IsFriend = friend;
                 v.SetName(p.DisplayName, p.Level, friend);
             }
+        }
+
+        /// <summary>Re-reads GET /market when standing in the market (after my shop changed, or a stall-changed event).</summary>
+        public void RefreshMarket()
+        {
+            if (_market == null || _marketLoading) return;
+            _marketLoading = true;
+            _marketRefreshAt = Time.time + MarketResyncSeconds; // periodic resync corrects any drift in shelf counts
+            Run(async () =>
+            {
+                try
+                {
+                    var state = await Api.GetMarketAsync();
+                    if (_market != null) _market.Apply(state);
+                }
+                finally
+                {
+                    _marketLoading = false;
+                }
+            });
         }
 
         /// <summary>Called after the local player blocks someone: they disappear at once.</summary>
@@ -425,6 +474,8 @@ namespace HappyWorld.Unity
                     v.transform.rotation = Quaternion.Euler(0, MovementLimiter.DirToYawDegrees(p.Dir), 0);
             }
 
+            if (_market != null && _marketRefreshAt > 0 && Time.time >= _marketRefreshAt) RefreshMarket();
+
             if (_local == null || CurrentZone == null || !Rt.Connected) return;
             _local.InputEnabled = !_ui.ModalOpen;
 
@@ -451,7 +502,7 @@ namespace HappyWorld.Unity
             HandleTap();
         }
 
-        /// <summary>Tap/click on another player opens their actions (add friend, block, report).</summary>
+        /// <summary>Tap/click on another player opens their actions (add friend, block, report); on a market stall, its details.</summary>
         private void HandleTap()
         {
             if (!Input.GetMouseButtonDown(0) || _ui.ModalOpen) return;
@@ -464,6 +515,12 @@ namespace HappyWorld.Unity
             var ray = Camera.main.ScreenPointToRay(Input.mousePosition);
             RaycastHit hit;
             if (!Physics.Raycast(ray, out hit, 200f, ~0, QueryTriggerInteraction.Collide)) return;
+            var stall = hit.collider.GetComponentInParent<StallView>();
+            if (stall != null && stall.Data != null)
+            {
+                _ui.ShowStallInfo(stall.Data);
+                return;
+            }
             var view = hit.collider.GetComponentInParent<AvatarView>();
             if (view == null || view.UserId == Profile.userId) return;
             var p = City.Get(view.UserId);

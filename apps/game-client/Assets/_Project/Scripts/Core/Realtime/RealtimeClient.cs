@@ -67,6 +67,44 @@ namespace HappyWorld.Core.Realtime
         public string zone;
     }
 
+    /// <summary>One NPC customer at a stall (Phase 5 living shop).</summary>
+    public sealed class MarketVisit
+    {
+        public int index;
+        public string customerType;  // STUDENT | WORKER | TOURIST | GRANDMA
+        public string productCode;
+        public string outcome;       // BOUGHT | TOO_EXPENSIVE | SOLD_OUT | NOT_SELLING
+        public int quantity;
+    }
+
+    /// <summary>market:activity — customers who visited one stall during the latest minute.</summary>
+    public sealed class MarketActivity
+    {
+        public int slot;
+        public string businessId;
+        public long tick;
+        public int tickSeconds = 60;
+        public List<MarketVisit> visits = new List<MarketVisit>();
+    }
+
+    public sealed class ShopStallLine
+    {
+        public string productCode;
+        public int shelfQuantity;
+    }
+
+    /// <summary>shop:updated — sent to the owner only, after customers bought something.</summary>
+    public sealed class ShopUpdated
+    {
+        public string businessId;
+        public int cashBox;
+        public int customers;
+        public int buyers;
+        public int unitsSold;
+        public int revenue;
+        public List<ShopStallLine> stall = new List<ShopStallLine>();
+    }
+
     /// <summary>
     /// Typed wrapper around the backend's /realtime namespace (docs/realtime.md).
     /// Events fire from <see cref="Pump"/>, i.e. on the thread that pumps (Unity main thread).
@@ -90,6 +128,9 @@ namespace HappyWorld.Core.Realtime
         public event Action<JToken> FriendAccepted;
         public event Action<FriendInvite> FriendInvited;
         public event Action SessionReplaced;
+        public event Action<MarketActivity> MarketActivity;
+        public event Action<int> MarketStallChanged;     // slot
+        public event Action<ShopUpdated> ShopUpdated;
         public event Action<string> ConnectError;
         public event Action<string> Disconnected;
 
@@ -113,6 +154,9 @@ namespace HappyWorld.Core.Realtime
             _io.On("friend:accepted", p => FriendAccepted?.Invoke(p));
             _io.On("friend:invited", p => FriendInvited?.Invoke(p.ToObject<FriendInvite>()));
             _io.On("session:replaced", _ => SessionReplaced?.Invoke());
+            _io.On("market:activity", p => MarketActivity?.Invoke(p.ToObject<MarketActivity>()));
+            _io.On("market:stall", p => MarketStallChanged?.Invoke((int?)p?["slot"] ?? -1));
+            _io.On("shop:updated", p => ShopUpdated?.Invoke(p.ToObject<ShopUpdated>()));
         }
 
         /// <summary>Opens the socket. Completion means the TCP/WebSocket is open; wait for <see cref="Ready"/> before joining a zone.</summary>

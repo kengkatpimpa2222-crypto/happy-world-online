@@ -106,5 +106,39 @@ export const upgradeBusinessSchema = z
   .strict();
 export type UpgradeBusinessRequest = z.infer<typeof upgradeBusinessSchema>;
 
+// ---- Living shop (Phase 5) ----
+/** Same character rules as display names; shown to other players in the market. */
+export const shopNameSchema = z
+  .string()
+  .trim()
+  .min(2)
+  .max(20)
+  .regex(DISPLAY_NAME_PATTERN, 'Only Thai/English letters, digits, space and _')
+  .refine((s) => !/\d{5,}/.test(s), 'Shop name must not contain long numbers');
+
+export const renameBusinessSchema = z.object({ name: shopNameSchema }).strict();
+export type RenameBusinessRequest = z.infer<typeof renameBusinessSchema>;
+
+export const setShelfSchema = z
+  .object({
+    productCode: businessProductCodeSchema,
+    /** Units that should be on the stall after the call (0 = take the product off the stall). */
+    quantity: z.number().int().min(0).max(200),
+  })
+  .strict();
+export type SetShelfRequest = z.infer<typeof setShelfSchema>;
+
+export const shopStatusSchema = z.enum(['OPEN', 'PAUSED', 'CLOSED']);
+export const setShopStatusSchema = z.object({ status: shopStatusSchema }).strict();
+export type SetShopStatusRequest = z.infer<typeof setShopStatusSchema>;
+
+export const ackShopReportSchema = z
+  .object({
+    /** `until` of the report the player saw; later sales stay in the next report. Defaults to now. */
+    until: z.iso.datetime().optional(),
+  })
+  .strict();
+export type AckShopReportRequest = z.infer<typeof ackShopReportSchema>;
+
 export const uuidParamSchema = z.uuid();
 export const questIdParamSchema = z.string().regex(/^[a-z0-9_]{2,64}$/);

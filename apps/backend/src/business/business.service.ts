@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import {
   BUSINESS_MAX_LEVEL,
+  BUSINESS_PRODUCT_CODES,
   BUSINESS_PRODUCTS,
   BusinessProductCode,
   businessLevelConfig,
@@ -16,6 +17,7 @@ import { PrismaService, Tx } from '../prisma/prisma.service';
 import { QuestsService } from '../quests/quests.service';
 import { WalletService } from '../wallet/wallet.service';
 import { SALE_TIP_TEXT_TH, simulateSaleRound, weightedAvgCost } from './business-sim';
+import { LivingShopService } from './living-shop.service';
 
 /**
  * Simulated shop. Uses in-game Gold only; it is a learning simulation, not an investment product.
@@ -30,9 +32,11 @@ export class BusinessService {
     private readonly quests: QuestsService,
     private readonly audit: AuditService,
     private readonly config: AppConfig,
+    private readonly shop: LivingShopService,
   ) {}
 
   async list(userId: string) {
+    await this.shop.settleOwned(userId);
     const rows = await this.prisma.business.findMany({
       where: { userId, deletedAt: null },
       include: { inventory: { orderBy: { productCode: 'asc' } } },
@@ -42,6 +46,7 @@ export class BusinessService {
   }
 
   async get(userId: string, id: string) {
+    await this.shop.settleOwned(userId, id);
     const b = await this.prisma.business.findFirst({
       where: { id, userId, deletedAt: null },
       include: { inventory: { orderBy: { productCode: 'asc' } } },
@@ -61,7 +66,8 @@ export class BusinessService {
       });
     }
     await this.prisma.tx(async (tx) => {
-      await this.lock(tx, userId, id);
+      const biz = await this.lock(tx, userId, id);
+      this.assertUnlocked(code, biz.level);
       await tx.businessInventory.upsert({
         where: { businessId_productCode: { businessId: id, productCode: code } },
         create: { businessId: id, productCode: code, quantity: 0, sellPrice: dto.price },
@@ -78,6 +84,7 @@ export class BusinessService {
 
     const replayed = await this.prisma.tx(async (tx) => {
       const biz = await this.lock(tx, userId, id);
+      this.assertUnlocked(code, biz.level);
       const line = await tx.businessInventory.findUnique({ where: { businessId_productCode: { businessId: id, productCode: code } } });
 
       const pay = await this.wallet.applyChange(tx, {
@@ -99,7 +106,11 @@ export class BusinessService {
       await tx.businessInventory.upsert({
         where: { businessId_productCode: { businessId: id, productCode: code } },
         create: { businessId: id, productCode: code, quantity: dto.quantity, avgUnitCost: product.unitCost, sellPrice: product.basePrice },
-        update: { quantity: { increment: dto.quantity }, avgUnitCost: weightedAvgCost(current, line?.avgUnitCost ?? 0, dto.quantity, product.unitCost) },
+        // goods already on the market stall share the same average cost
+        update: {
+          quantity: { increment: dto.quantity },
+          avgUnitCost: weightedAvgCost(current + (line?.shelfQuantity ?? 0), line?.avgUnitCost ?? 0, dto.quantity, product.unitCost),
+        },
       });
       await tx.business.update({ where: { id }, data: { totalExpense: { increment: cost } } });
       await this.quests.recordEvent(tx, userId, 'BUSINESS_RESTOCK', dto.quantity);
@@ -205,14 +216,21 @@ export class BusinessService {
     return { replayed, business: await this.get(userId, id) };
   }
 
+  /**
+   * Locks the shop row and first settles any NPC customers that are due, so the change being made
+   * (price, stock, level) never applies retroactively to customers who already came.
+   */
   private async lock(tx: Tx, userId: string, id: string) {
-    const rows = await tx.$queryRaw<{ id: string; level: number; last_sale_at: Date | null }[]>`
-      SELECT "id", "level", "last_sale_at" FROM "businesses"
-       WHERE "id" = ${id}::uuid AND "user_id" = ${userId}::uuid AND "deleted_at" IS NULL
-       FOR UPDATE`;
-    const row = rows[0];
-    if (!row) throw AppException.notFound('Business not found');
-    return { id: row.id, level: row.level, lastSaleAt: row.last_sale_at };
+    const shop = await this.shop.lock(tx, userId, id);
+    await this.shop.settleLocked(tx, shop);
+    return { id: shop.id, level: shop.level, lastSaleAt: shop.lastSaleAt };
+  }
+
+  private assertUnlocked(code: BusinessProductCode, level: number): void {
+    const unlockLevel = BUSINESS_PRODUCTS[code].unlockLevel;
+    if (unlockLevel > level) {
+      throw AppException.conflict(ErrorCode.BUSINESS_PRODUCT_LOCKED, `Unlocks at shop level ${unlockLevel}`, { unlockLevel });
+    }
   }
 
   private present(b: {
@@ -223,7 +241,11 @@ export class BusinessService {
     totalExpense: number;
     totalUnitsSold: number;
     lastSaleAt: Date | null;
-    inventory: { productCode: string; quantity: number; avgUnitCost: number; sellPrice: number }[];
+    shopStatus: string;
+    stallSlot: number | null;
+    cashBox: number;
+    totalCustomers: number;
+    inventory: { productCode: string; quantity: number; avgUnitCost: number; sellPrice: number; shelfQuantity: number; onStall: boolean }[];
   }) {
     const cfg = businessLevelConfig(b.level);
     return {
@@ -239,7 +261,30 @@ export class BusinessService {
       lastSaleAt: b.lastSaleAt,
       products: b.inventory.map((i) => {
         const p = BUSINESS_PRODUCTS[i.productCode as BusinessProductCode];
-        return { ...i, unitCost: p.unitCost, minPrice: p.minPrice, maxPrice: p.maxPrice, basePrice: p.basePrice };
+        return {
+          ...i,
+          unitCost: p.unitCost,
+          minPrice: p.minPrice,
+          maxPrice: p.maxPrice,
+          basePrice: p.basePrice,
+          unlockLevel: p.unlockLevel,
+        };
+      }),
+      // ---- living shop (Phase 5) ----
+      stall: {
+        status: b.shopStatus,
+        slot: b.stallSlot,
+        cashBox: b.cashBox,
+        totalCustomers: b.totalCustomers,
+        shelfSlots: cfg.shelfSlots,
+        shelfCapacity: cfg.shelfCapacity,
+        customersPerMinute: cfg.customersPerMinute,
+        slotsUsed: b.inventory.filter((i) => i.onStall).length,
+      },
+      /** every product of the game, so the client can show what unlocks at which level */
+      catalog: BUSINESS_PRODUCT_CODES.map((code) => {
+        const p = BUSINESS_PRODUCTS[code];
+        return { productCode: code, unitCost: p.unitCost, minPrice: p.minPrice, maxPrice: p.maxPrice, basePrice: p.basePrice, unlockLevel: p.unlockLevel, unlocked: p.unlockLevel <= b.level };
       }),
     };
   }

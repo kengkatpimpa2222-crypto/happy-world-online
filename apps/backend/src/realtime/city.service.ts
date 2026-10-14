@@ -6,7 +6,12 @@ import { PresenceEntry } from '../presence/presence.store';
 import { PresenceService } from '../presence/presence.service';
 import { SocialGraphService } from '../social/social-graph.service';
 
-const MAX_SHARDS = 50;
+export const MAX_SHARDS = 50;
+
+/** Socket.IO room of one shard of a zone for one age band. */
+export function zoneRoomName(zone: string, ageBand: string, shard: number): string {
+  return `zone:${zone}:${ageBand}:${shard}`;
+}
 
 export interface PublicPlayer {
   userId: string;
@@ -41,7 +46,7 @@ export class CityService {
   }
 
   roomName(zone: string, ageBand: string, shard: number): string {
-    return `zone:${zone}:${ageBand}:${shard}`;
+    return zoneRoomName(zone, ageBand, shard);
   }
 
   /** First shard of this zone (for this age band) that still has space. */

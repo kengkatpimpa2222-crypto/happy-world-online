@@ -24,6 +24,8 @@ export const envSchema = z.object({
   RATE_LIMIT_FRIEND_REQUESTS_PER_HOUR: z.coerce.number().int().positive().default(30),
   RATE_LIMIT_REPORTS_PER_HOUR: z.coerce.number().int().positive().default(20),
   BUSINESS_SALE_COOLDOWN_SECONDS: z.coerce.number().int().min(0).default(30),
+  /** How often open market stalls are settled in the background (NPC customers). 0 = only on demand. */
+  LIVING_SHOP_SETTLE_INTERVAL_SECONDS: z.coerce.number().int().min(0).default(20),
 });
 
 export type Env = z.infer<typeof envSchema>;

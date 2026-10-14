@@ -46,6 +46,12 @@ namespace HappyWorld.Core.Localization
             ["ZONE_NOT_FOUND"] = "ไม่พบโซนนี้",
             ["NOT_IN_ZONE"] = "ยังไม่ได้เข้าโซน",
             ["MOVE_REJECTED"] = "ตำแหน่งไม่ถูกต้อง",
+            ["BUSINESS_PRODUCT_LOCKED"] = "สินค้านี้ยังไม่ปลดล็อก อัปเกรดร้านก่อน",
+            ["SHOP_NAME_REJECTED"] = "ชื่อร้านนี้ใช้ไม่ได้ (ห้ามมีเบอร์โทร ลิงก์ หรือคำไม่สุภาพ)",
+            ["SHOP_SHELF_FULL"] = "แผงเต็มแล้ว (จำนวนช่องหรือจำนวนชิ้นเกินที่แผงรับได้)",
+            ["SHOP_NOT_ENOUGH_STOCK"] = "ของในคลังไม่พอ ซื้อสินค้าเข้าร้านก่อน",
+            ["SHOP_SHELF_EMPTY"] = "ยังไม่มีของบนแผง วางสินค้าขึ้นแผงก่อนเปิดร้าน",
+            ["SHOP_NOTHING_TO_COLLECT"] = "ลิ้นชักยังว่างอยู่",
             ["error.generic"] = "เกิดข้อผิดพลาด ลองใหม่อีกครั้ง",
 
             // UI
@@ -92,6 +98,7 @@ namespace HappyWorld.Core.Localization
             ["ui.now_friends"] = "เป็นเพื่อนกันแล้ว",
             ["ui.session_replaced"] = "บัญชีนี้เข้าเล่นจากอุปกรณ์อื่น",
             ["ui.reconnect"] = "เชื่อมต่อใหม่",
+            ["ui.go_market"] = "ไปตลาด",
 
             // items and quests by id (apps/backend/src/database/seed-data.ts)
             ["outfit_basic_tee"] = "เสื้อยืดพื้นฐาน",
@@ -119,6 +126,8 @@ namespace HappyWorld.Core.Localization
             ["home_first_furniture"] = "แต่งบ้านชิ้นแรก",
             ["coop_make_friend"] = "มีเพื่อนคนแรก",
             ["life_budget_buyer"] = "นักช้อปรู้คุณค่า",
+            ["shop_open_stall"] = "เปิดแผงในตลาดครั้งแรก",
+            ["shop_serve_customers"] = "ขายให้ลูกค้า 15 คน",
 
             // zones (nameKey from GET /city)
             ["zone.plaza"] = "ลานกลางเมือง",

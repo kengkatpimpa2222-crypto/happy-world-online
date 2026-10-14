@@ -101,6 +101,7 @@ export const REPORT_CONTEXT_CODES = [
   'AVATAR',
   'HOME_VISIT',
   'MINIGAME',
+  'MARKET_STALL',
 ] as const;
 
 // ---------- REST schemas ----------
@@ -162,5 +163,12 @@ export const WsEvent = {
   FRIEND_REQUEST_ACCEPTED: 'friend:accepted',
   FRIEND_INVITED: 'friend:invited',
   SESSION_REPLACED: 'session:replaced',
+  // Phase 5: living shop
+  /** NPC customer visits at stalls, sent to players in the MARKET zone of the same age band */
+  MARKET_ACTIVITY: 'market:activity',
+  /** a stall opened, paused, closed or changed its goods: clients re-fetch GET /market */
+  MARKET_STALL_CHANGED: 'market:stall',
+  /** to the owner only: cash box / shelf changed after customers bought something */
+  SHOP_UPDATED: 'shop:updated',
   ERROR: 'error:app',
 } as const;

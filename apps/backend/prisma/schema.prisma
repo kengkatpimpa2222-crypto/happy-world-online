@@ -73,6 +73,15 @@ enum QuestObjectiveType {
   PLACE_FURNITURE
   ADD_FRIEND
   PLAY_MINIGAME
+  SHOP_OPEN
+  SHOP_SERVE_CUSTOMERS
+}
+
+/// สถานะแผงร้านในตลาด (Phase 5)
+enum ShopStatus {
+  CLOSED
+  OPEN
+  PAUSED
 }
 
 enum QuestStatus {
@@ -339,28 +348,73 @@ model Business {
   updatedAt      DateTime  @updatedAt @map("updated_at")
   deletedAt      DateTime? @map("deleted_at")
 
-  user      User                @relation(fields: [userId], references: [id], onDelete: Cascade)
-  inventory BusinessInventory[]
+  // ---- Living shop (Phase 5) ----
+  shopStatus     ShopStatus @default(CLOSED) @map("shop_status")
+  /// ตำแหน่งแผงในโซน MARKET (0..MARKET_STALL_SLOTS-1) ของ age band นี้; null = ไม่มีที่บนแผนที่
+  /// unique (market_age_band, stall_slot) WHERE stall_slot IS NOT NULL อยู่ใน migration SQL
+  stallSlot      Int?       @map("stall_slot")
+  marketAgeBand  AgeBand?   @map("market_age_band")
+  /// เงินจากลูกค้า NPC ที่ยังไม่ได้เก็บเข้ากระเป๋า (CHECK >= 0)
+  cashBox        Int        @default(0) @map("cash_box")
+  /// ติ๊กล่าสุด (epoch seconds / SHOP_TICK_SECONDS) ที่คำนวณลูกค้าแล้ว
+  settledTick    Int?       @map("settled_tick")
+  openedAt       DateTime?  @map("opened_at")
+  reportSeenAt   DateTime?  @map("report_seen_at")
+  totalCustomers Int        @default(0) @map("total_customers")
+
+  user        User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  inventory   BusinessInventory[]
+  settlements ShopSettlement[]
 
   @@index([userId])
+  @@index([shopStatus, settledTick])
   @@map("businesses")
 }
 
 model BusinessInventory {
-  id          String   @id @default(uuid()) @db.Uuid
-  businessId  String   @map("business_id") @db.Uuid
-  productCode String   @map("product_code") @db.VarChar(32)
+  id            String   @id @default(uuid()) @db.Uuid
+  businessId    String   @map("business_id") @db.Uuid
+  productCode   String   @map("product_code") @db.VarChar(32)
   /// CHECK (quantity >= 0)
-  quantity    Int      @default(0)
+  quantity      Int      @default(0)
   /// ต้นทุนเฉลี่ยต่อชิ้น (หน่วย: Gold)
-  avgUnitCost Int      @default(0) @map("avg_unit_cost")
-  sellPrice   Int      @map("sell_price")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  avgUnitCost   Int      @default(0) @map("avg_unit_cost")
+  sellPrice     Int      @map("sell_price")
+  /// จำนวนบนแผงในตลาด (แยกจาก quantity ที่อยู่ในคลัง) CHECK >= 0
+  shelfQuantity Int      @default(0) @map("shelf_quantity")
+  /// สินค้านี้วางบนแผงอยู่ (ยังนับช่องแม้ขายหมด)
+  onStall       Boolean  @default(false) @map("on_stall")
+  updatedAt     DateTime @updatedAt @map("updated_at")
 
   business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
 
   @@unique([businessId, productCode])
   @@map("business_inventory")
+}
+
+/// สรุปลูกค้า NPC ต่อการ settle 1 ครั้ง (ใช้ทำรายงานเมื่อผู้เล่นกลับเข้าเกม)
+model ShopSettlement {
+  id               String   @id @default(uuid()) @db.Uuid
+  businessId       String   @map("business_id") @db.Uuid
+  fromTick         Int      @map("from_tick")
+  toTick           Int      @map("to_tick")
+  customers        Int
+  buyers           Int
+  unitsSold        Int      @map("units_sold")
+  revenue          Int
+  costOfGoods      Int      @map("cost_of_goods")
+  lostTooExpensive Int      @map("lost_too_expensive")
+  lostSoldOut      Int      @map("lost_sold_out")
+  lostNotSelling   Int      @map("lost_not_selling")
+  /// ต่อสินค้า: { [productCode]: { unitsSold, revenue, costOfGoods, lostTooExpensive, lostSoldOut, wanted } }
+  lines            Json
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@unique([businessId, toTick])
+  @@index([businessId, createdAt])
+  @@map("shop_settlements")
 }
 
 // ---------- Quests ----------

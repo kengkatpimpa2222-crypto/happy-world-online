@@ -5,7 +5,7 @@ Base URL: `/api/v1` · สเปกเต็ม: [openapi.json](openapi.json) (�
 ## หลักทั่วไป
 
 - ส่ง `Authorization: Bearer <accessToken>` ทุก endpoint ยกเว้น health, `auth/guest`, `auth/login`, `auth/refresh`
-- คำขอที่ใช้เงิน (`POST /store/purchases`, `POST /businesses/:id/restock`) ต้องมี header `Idempotency-Key` (8–64 ตัว `[A-Za-z0-9_-]`) สร้างใหม่ทุกครั้งที่ผู้เล่นกดซื้อ และใช้ค่าเดิมเมื่อ retry
+- คำขอที่ใช้เงิน (`POST /store/purchases`, `POST /businesses/:id/restock`, `POST /businesses/:id/collect`) ต้องมี header `Idempotency-Key` (8–64 ตัว `[A-Za-z0-9_-]`) สร้างใหม่ทุกครั้งที่ผู้เล่นกดซื้อ และใช้ค่าเดิมเมื่อ retry
 - Error ทุกตัวมีรูปแบบเดียวกัน:
 
 ```json
@@ -66,8 +66,15 @@ curl -s -XPOST $API/businesses/$SHOP/sell -H "authorization: Bearer $TOKEN"
 | GET | /businesses/:id | รายละเอียดร้าน รายรับ รายจ่าย กำไร |
 | PATCH | /businesses/:id/pricing | `{productCode, price}` ภายในช่วง min–max |
 | POST | /businesses/:id/restock | `{productCode, quantity}` + Idempotency-Key |
-| POST | /businesses/:id/sell | ขาย 1 รอบ (มี cooldown ค่าเริ่มต้น 30 วินาที) |
+| POST | /businesses/:id/sell | ขาย 1 รอบ (มี cooldown ค่าเริ่มต้น 30 วินาที) **deprecated ตั้งแต่ Phase 5** ยังใช้ได้ แต่เกมใช้แผงในตลาดแทน |
 | POST | /businesses/:id/upgrade | `{expectedLevel}` กดซ้ำไม่จ่ายซ้ำ |
+| PATCH | /businesses/:id | `{name}` ตั้งชื่อร้าน (2–20 ตัว, ผ่านตัวกรองคำ) |
+| PUT | /businesses/:id/shelf | `{productCode, quantity}` จำนวนบนแผง (ย้ายจาก/กลับคลัง), 0 = เอาลงจากแผง |
+| POST | /businesses/:id/status | `{status: OPEN \| PAUSED \| CLOSED}` เปิดร้าน = ได้ตำแหน่งแผงในตลาด |
+| POST | /businesses/:id/collect | ย้ายเงินในลิ้นชักเข้ากระเป๋า + Idempotency-Key |
+| GET | /businesses/:id/report | รายงานตั้งแต่อ่านครั้งล่าสุด: ลูกค้า ยอดขาย กำไร ลูกค้าที่พลาด คำแนะนำ |
+| POST | /businesses/:id/report/ack | `{until?}` บันทึกว่าอ่านรายงานถึงเวลานี้แล้ว (204) |
+| GET | /market | แผงในตลาดที่ผู้เล่นเห็นได้ (age band เดียวกัน, ไม่รวมคนที่ block) + แผงของฉัน |
 
 | POST | /friends/requests | `{friendCode}` หรือ `{playerId}`; ส่งซ้ำได้ request เดิม; ถ้าอีกฝ่ายขอมาก่อน = เป็นเพื่อนทันที (`autoAccepted`) |
 | GET | /friends/requests/incoming | คำขอที่รอเราตอบ |
@@ -88,3 +95,17 @@ curl -s -XPOST $API/businesses/$SHOP/sell -H "authorization: Bearer $TOKEN"
 WebSocket: ดู [realtime.md](realtime.md)
 
 หมายเหตุ: ร้านค้าเพิ่ม `GET /businesses`, `PATCH /pricing`, `POST /restock` นอกเหนือจากรายการขั้นต่ำ เพราะต้องใช้สำหรับ "ตั้งราคา" และ "ซื้อวัตถุดิบ" ตามที่ระบุในฟีเจอร์ 3.4
+
+## ร้านมีชีวิต (Phase 5)
+
+```bash
+# วางของขึ้นแผงแล้วเปิดร้าน (ของต้องอยู่ในคลังก่อน: restock)
+curl -s -XPUT $API/businesses/$SHOP/shelf -H "authorization: Bearer $TOKEN" -H 'content-type: application/json' -d '{"productCode":"LEMONADE","quantity":20}'
+curl -s -XPOST $API/businesses/$SHOP/status -H "authorization: Bearer $TOKEN" -H 'content-type: application/json' -d '{"status":"OPEN"}'
+# ลูกค้า NPC มาทุกนาทีทั้งตอนออนไลน์และออฟไลน์ (สูงสุด 8 ชม.) เงินเข้าลิ้นชัก (stall.cashBox)
+curl -s $API/businesses/$SHOP/report -H "authorization: Bearer $TOKEN"
+curl -s -XPOST $API/businesses/$SHOP/collect -H "authorization: Bearer $TOKEN" -H "Idempotency-Key: $(uuidgen | tr -d -)"
+```
+
+`GET /businesses` และ `GET /businesses/:id` คืน field เดิมทั้งหมด และเพิ่ม `products[].shelfQuantity/onStall/unlockLevel`, `stall { status, slot, cashBox, totalCustomers, shelfSlots, shelfCapacity, customersPerMinute, slotsUsed }` และ `catalog[]` (สินค้าทุกชนิดพร้อมเลเวลที่ปลดล็อก) การอ่านร้านจะคำนวณลูกค้าที่ค้างอยู่ก่อนเสมอ
+

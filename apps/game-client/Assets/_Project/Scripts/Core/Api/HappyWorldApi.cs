@@ -20,6 +20,9 @@ namespace HappyWorld.Core.Api
         {
             NullValueHandling = NullValueHandling.Ignore,
             MissingMemberHandling = MissingMemberHandling.Ignore,
+            // keep ISO timestamps as the server sent them when the target is a string (e.g. ShopReport.untilIso,
+            // which is sent back unchanged); DateTime fields are still parsed
+            DateParseHandling = DateParseHandling.None,
         };
 
         private readonly IHttpTransport _http;
@@ -134,6 +137,23 @@ namespace HappyWorld.Core.Api
         public Task<SaleResult> SellAsync(string businessId) => SendAsync<SaleResult>("POST", "/businesses/" + businessId + "/sell", null);
         public Task<JObject> UpgradeBusinessAsync(string businessId, int expectedLevel) =>
             SendAsync<JObject>("POST", "/businesses/" + businessId + "/upgrade", new { expectedLevel });
+
+        // ---------- Living shop: market stall (Phase 5) ----------
+        public Task<Business> GetBusinessAsync(string businessId) => SendAsync<Business>("GET", "/businesses/" + businessId);
+        public Task<Business> RenameShopAsync(string businessId, string name) =>
+            SendAsync<Business>("PATCH", "/businesses/" + businessId, new { name });
+        /// <summary>Sets how many units stand on the stall (taken from / returned to the shop's storage). 0 = off the stall.</summary>
+        public Task<Business> SetShelfAsync(string businessId, string productCode, int quantity) =>
+            SendAsync<Business>("PUT", "/businesses/" + businessId + "/shelf", new { productCode, quantity });
+        /// <param name="status">OPEN, PAUSED or CLOSED</param>
+        public Task<Business> SetShopStatusAsync(string businessId, string status) =>
+            SendAsync<Business>("POST", "/businesses/" + businessId + "/status", new { status });
+        public Task<CollectResult> CollectShopAsync(string businessId, string idempotencyKey) =>
+            SendAsync<CollectResult>("POST", "/businesses/" + businessId + "/collect", null, idempotencyKey: idempotencyKey);
+        public Task<ShopReport> GetShopReportAsync(string businessId) => SendAsync<ShopReport>("GET", "/businesses/" + businessId + "/report");
+        public Task AckShopReportAsync(string businessId, string untilIso) =>
+            SendAsync<JObject>("POST", "/businesses/" + businessId + "/report/ack", new { until = untilIso });
+        public Task<MarketState> GetMarketAsync() => SendAsync<MarketState>("GET", "/market");
 
         // ---------- Friends / safety ----------
         public Task<FriendRequestResult> SendFriendRequestByCodeAsync(string friendCode) =>

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
 // DTOs mirror the JSON the NestJS backend actually returns (apps/backend/src/**/*.service.ts).
@@ -149,6 +150,36 @@ namespace HappyWorld.Core.Api
         public int minPrice;
         public int maxPrice;
         public int basePrice;
+        // Phase 5: market stall
+        public int shelfQuantity;
+        public bool onStall;
+        public int unlockLevel = 1;
+    }
+
+    /// <summary>Market stall state of the player's shop (Phase 5).</summary>
+    public sealed class ShopStall
+    {
+        public string status = "CLOSED"; // CLOSED | OPEN | PAUSED
+        public int? slot;
+        public int cashBox;
+        public int totalCustomers;
+        public int shelfSlots;
+        public int shelfCapacity;
+        public float customersPerMinute;
+        public int slotsUsed;
+        public bool IsOpen => status == "OPEN";
+    }
+
+    /// <summary>Every product of the game, with the shop level that unlocks it.</summary>
+    public sealed class ShopCatalogProduct
+    {
+        public string productCode;
+        public int unitCost;
+        public int minPrice;
+        public int maxPrice;
+        public int basePrice;
+        public int unlockLevel;
+        public bool unlocked;
     }
 
     public sealed class BusinessFinance
@@ -167,7 +198,106 @@ namespace HappyWorld.Core.Api
         public int? upgradeCost;
         public int stockCapacity;
         public BusinessFinance finance;
+        public int totalUnitsSold;
         public List<BusinessProduct> products = new List<BusinessProduct>();
+        public ShopStall stall = new ShopStall();
+        public List<ShopCatalogProduct> catalog = new List<ShopCatalogProduct>();
+    }
+
+    public sealed class CollectResult
+    {
+        public bool replayed;
+        public int collected;
+        public Dictionary<string, int> wallet;
+        public Business business;
+    }
+
+    public sealed class ShopTip
+    {
+        public string code;
+        public string textTh;
+    }
+
+    public sealed class ShopReportProduct
+    {
+        public string productCode;
+        public int unitsSold;
+        public int revenue;
+        public int costOfGoods;
+        public int profit;
+        public int wanted;
+        public int lostTooExpensive;
+        public int lostSoldOut;
+        public bool onStall;
+        public int shelfLeft;
+        public int? price;
+    }
+
+    /// <summary>"While you were away" report: GET /businesses/:id/report.</summary>
+    public sealed class ShopReport
+    {
+        public string businessId;
+        public string shopName;
+        public string status;
+        public DateTime since;
+        /// <summary>Raw ISO string, sent back unchanged when acknowledging.</summary>
+        [JsonProperty("until")] public string untilIso;
+        public bool hasNews;
+        public int customers;
+        public int buyers;
+        public int unitsSold;
+        public int revenue;
+        public int costOfGoods;
+        public int profit;
+        public int lostTooExpensive;
+        public int lostSoldOut;
+        public int lostNotSelling;
+        public int cashBox;
+        public string bestSeller;
+        public List<ShopReportProduct> products = new List<ShopReportProduct>();
+        public List<ShopTip> tips = new List<ShopTip>();
+    }
+
+    public sealed class MarketStallProduct
+    {
+        public string productCode;
+        public int price;
+        public int shelfQuantity;
+    }
+
+    public sealed class MarketStall
+    {
+        public int slot;
+        public float x;
+        public float y;
+        /// <summary>+1: customers stand on the larger-y side, -1: smaller-y side.</summary>
+        public int face = 1;
+        public string businessId;
+        public string name;
+        public string ownerId;
+        public string ownerName;
+        public int level;
+        public string status;
+        public bool isMine;
+        public bool isFriend;
+        public List<MarketStallProduct> products = new List<MarketStallProduct>();
+    }
+
+    public sealed class MyMarketShop
+    {
+        public string businessId;
+        public string status;
+        public int? stallSlot;
+    }
+
+    /// <summary>GET /market</summary>
+    public sealed class MarketState
+    {
+        public string zone;
+        public int slots;
+        public int tickSeconds = 60;
+        public List<MarketStall> stalls = new List<MarketStall>();
+        public MyMarketShop myShop;
     }
 
     public sealed class SaleTotals
