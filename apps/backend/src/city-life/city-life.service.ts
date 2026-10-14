@@ -67,7 +67,8 @@ export class CityLifeService {
     private readonly graph: SocialGraphService,
     config: AppConfig,
   ) {
-    this.weatherOverride = config.get('CITY_WEATHER_OVERRIDE') ?? null;
+    // `||` not `??`: .env.example ships `CITY_WEATHER_OVERRIDE=` (empty), which crashed GET /city/now (Phase 7 QA)
+    this.weatherOverride = config.get('CITY_WEATHER_OVERRIDE') || null;
   }
 
   /** City clock = the festival clock (one offset moves both for QA). */
