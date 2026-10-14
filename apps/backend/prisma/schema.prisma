@@ -39,6 +39,7 @@ enum WalletTransactionType {
   BUSINESS_SALE
   BUSINESS_UPGRADE
   MINIGAME_REWARD
+  FESTIVAL_REWARD
   IAP_GRANT
   IAP_REFUND
   ADMIN_ADJUSTMENT
@@ -73,6 +74,16 @@ enum QuestObjectiveType {
   PLACE_FURNITURE
   ADD_FRIEND
   PLAY_MINIGAME
+  SHOP_OPEN
+  SHOP_SERVE_CUSTOMERS
+  FESTIVAL_CONTRIBUTE
+}
+
+/// สถานะแผงร้านในตลาด (Phase 5)
+enum ShopStatus {
+  CLOSED
+  OPEN
+  PAUSED
 }
 
 enum QuestStatus {
@@ -142,24 +153,27 @@ model User {
   updatedAt         DateTime   @updatedAt @map("updated_at")
   deletedAt         DateTime?  @map("deleted_at")
 
-  profile            PlayerProfile?
-  wallets            PlayerWallet[]
-  walletTransactions WalletTransaction[]
-  inventory          PlayerInventory[]
-  home               PlayerHome?
-  businesses         Business[]
-  questProgress      QuestProgress[]
-  sessions           GameSession[]
-  purchases          Purchase[]
-  subscriptions      Subscription[]
-  friends            Friend[]            @relation("UserFriends")
-  friendOf           Friend[]            @relation("FriendOfUser")
-  sentRequests       FriendRequest[]     @relation("SentRequests")
-  receivedRequests   FriendRequest[]     @relation("ReceivedRequests")
-  blocking           BlockedPlayer[]     @relation("Blocker")
-  blockedBy          BlockedPlayer[]     @relation("Blocked")
-  reportsMade        ModerationReport[]  @relation("Reporter")
-  reportsReceived    ModerationReport[]  @relation("Reported")
+  profile               PlayerProfile?
+  wallets               PlayerWallet[]
+  walletTransactions    WalletTransaction[]
+  inventory             PlayerInventory[]
+  home                  PlayerHome?
+  businesses            Business[]
+  questProgress         QuestProgress[]
+  sessions              GameSession[]
+  purchases             Purchase[]
+  subscriptions         Subscription[]
+  friends               Friend[]               @relation("UserFriends")
+  friendOf              Friend[]               @relation("FriendOfUser")
+  sentRequests          FriendRequest[]        @relation("SentRequests")
+  receivedRequests      FriendRequest[]        @relation("ReceivedRequests")
+  blocking              BlockedPlayer[]        @relation("Blocker")
+  blockedBy             BlockedPlayer[]        @relation("Blocked")
+  reportsMade           ModerationReport[]     @relation("Reporter")
+  reportsReceived       ModerationReport[]     @relation("Reported")
+  festivalContributions FestivalContribution[]
+  cityBuilds            CityBuilderContribution[]
+  festivalClaims        FestivalRewardClaim[]
 
   @@index([deviceIdHash])
   @@map("users")
@@ -339,23 +353,43 @@ model Business {
   updatedAt      DateTime  @updatedAt @map("updated_at")
   deletedAt      DateTime? @map("deleted_at")
 
-  user      User                @relation(fields: [userId], references: [id], onDelete: Cascade)
-  inventory BusinessInventory[]
+  // ---- Living shop (Phase 5) ----
+  shopStatus     ShopStatus @default(CLOSED) @map("shop_status")
+  /// ตำแหน่งแผงในโซน MARKET (0..MARKET_STALL_SLOTS-1) ของ age band นี้; null = ไม่มีที่บนแผนที่
+  /// unique (market_age_band, stall_slot) WHERE stall_slot IS NOT NULL อยู่ใน migration SQL
+  stallSlot      Int?       @map("stall_slot")
+  marketAgeBand  AgeBand?   @map("market_age_band")
+  /// เงินจากลูกค้า NPC ที่ยังไม่ได้เก็บเข้ากระเป๋า (CHECK >= 0)
+  cashBox        Int        @default(0) @map("cash_box")
+  /// ติ๊กล่าสุด (epoch seconds / SHOP_TICK_SECONDS) ที่คำนวณลูกค้าแล้ว
+  settledTick    Int?       @map("settled_tick")
+  openedAt       DateTime?  @map("opened_at")
+  reportSeenAt   DateTime?  @map("report_seen_at")
+  totalCustomers Int        @default(0) @map("total_customers")
+
+  user        User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  inventory   BusinessInventory[]
+  settlements ShopSettlement[]
 
   @@index([userId])
+  @@index([shopStatus, settledTick])
   @@map("businesses")
 }
 
 model BusinessInventory {
-  id          String   @id @default(uuid()) @db.Uuid
-  businessId  String   @map("business_id") @db.Uuid
-  productCode String   @map("product_code") @db.VarChar(32)
+  id            String   @id @default(uuid()) @db.Uuid
+  businessId    String   @map("business_id") @db.Uuid
+  productCode   String   @map("product_code") @db.VarChar(32)
   /// CHECK (quantity >= 0)
-  quantity    Int      @default(0)
+  quantity      Int      @default(0)
   /// ต้นทุนเฉลี่ยต่อชิ้น (หน่วย: Gold)
-  avgUnitCost Int      @default(0) @map("avg_unit_cost")
-  sellPrice   Int      @map("sell_price")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  avgUnitCost   Int      @default(0) @map("avg_unit_cost")
+  sellPrice     Int      @map("sell_price")
+  /// จำนวนบนแผงในตลาด (แยกจาก quantity ที่อยู่ในคลัง) CHECK >= 0
+  shelfQuantity Int      @default(0) @map("shelf_quantity")
+  /// สินค้านี้วางบนแผงอยู่ (ยังนับช่องแม้ขายหมด)
+  onStall       Boolean  @default(false) @map("on_stall")
+  updatedAt     DateTime @updatedAt @map("updated_at")
 
   business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
 
@@ -363,7 +397,77 @@ model BusinessInventory {
   @@map("business_inventory")
 }
 
+/// สรุปลูกค้า NPC ต่อการ settle 1 ครั้ง (ใช้ทำรายงานเมื่อผู้เล่นกลับเข้าเกม)
+model ShopSettlement {
+  id               String   @id @default(uuid()) @db.Uuid
+  businessId       String   @map("business_id") @db.Uuid
+  fromTick         Int      @map("from_tick")
+  toTick           Int      @map("to_tick")
+  customers        Int
+  buyers           Int
+  unitsSold        Int      @map("units_sold")
+  revenue          Int
+  costOfGoods      Int      @map("cost_of_goods")
+  lostTooExpensive Int      @map("lost_too_expensive")
+  lostSoldOut      Int      @map("lost_sold_out")
+  lostNotSelling   Int      @map("lost_not_selling")
+  /// ต่อสินค้า: { [productCode]: { unitsSold, revenue, costOfGoods, lostTooExpensive, lostSoldOut, wanted } }
+  lines            Json
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@unique([businessId, toTick])
+  @@index([businessId, createdAt])
+  @@map("shop_settlements")
+}
+
 // ---------- Quests ----------
+
+// ---------- City festivals (Phase 6) ----------
+
+/// ความคืบหน้าของทั้งเมืองในเทศกาลหนึ่ง แยกตามช่วงอายุ (แต่ละช่วงอายุมีเมืองของตัวเอง)
+model FestivalCityProgress {
+  festivalKey  String   @map("festival_key") @db.VarChar(40)
+  ageBand      AgeBand  @map("age_band")
+  /// CHECK (points >= 0)
+  points       Int      @default(0)
+  contributors Int      @default(0)
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@id([festivalKey, ageBand])
+  @@map("festival_city_progress")
+}
+
+/// ส่วนที่ผู้เล่นแต่ละคนช่วยเมือง (จำนวนสินค้าเทศกาลที่ขายได้)
+model FestivalContribution {
+  festivalKey String   @map("festival_key") @db.VarChar(40)
+  userId      String   @map("user_id") @db.Uuid
+  ageBand     AgeBand  @map("age_band")
+  /// CHECK (points >= 0)
+  points      Int      @default(0)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([festivalKey, userId])
+  @@index([festivalKey, ageBand, points(sort: Desc)])
+  @@map("festival_contributions")
+}
+
+/// รางวัลขั้นของเมืองที่ผู้เล่นรับแล้ว (รับได้ครั้งเดียวต่อขั้น)
+model FestivalRewardClaim {
+  festivalKey String   @map("festival_key") @db.VarChar(40)
+  userId      String   @map("user_id") @db.Uuid
+  tier        Int
+  claimedAt   DateTime @default(now()) @map("claimed_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([festivalKey, userId, tier])
+  @@map("festival_reward_claims")
+}
 
 model Quest {
   id                  String             @id @db.VarChar(64)
@@ -561,4 +665,42 @@ model AuditLog {
   @@index([actorUserId, createdAt])
   @@index([action, createdAt])
   @@map("audit_logs")
+}
+
+/// Phase 7: แต้มสร้างเมืองสะสมของแต่ละเมือง (หนึ่งเมืองต่อช่วงอายุ) ทุกชิ้นที่ขายได้ในตลาด = 1 แต้ม
+model CityGrowth {
+  ageBand   AgeBand  @id @map("age_band")
+  /// CHECK (points >= 0)
+  points    Int      @default(0)
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("city_growth")
+}
+
+/// Phase 7: โครงการเมืองที่สร้างเสร็จแล้ว (อยู่ถาวร มีผลกับตลาดตั้งแต่ completed_at)
+model CityProjectCompletion {
+  ageBand     AgeBand  @map("age_band")
+  projectCode String   @map("project_code") @db.VarChar(30)
+  completedAt DateTime @default(now()) @map("completed_at")
+
+  @@id([ageBand, projectCode])
+  @@map("city_project_completions")
+}
+
+/// Phase 7: ผู้เล่นแต่ละคนช่วยสร้างโครงการไหนไปกี่แต้ม
+model CityBuilderContribution {
+  projectCode String   @map("project_code") @db.VarChar(30)
+  userId      String   @map("user_id") @db.Uuid
+  ageBand     AgeBand  @map("age_band")
+  /// CHECK (points >= 0)
+  points      Int      @default(0)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([projectCode, userId])
+  @@index([projectCode, ageBand, points(sort: Desc)])
+  @@index([userId])
+  @@map("city_builder_contributions")
 }

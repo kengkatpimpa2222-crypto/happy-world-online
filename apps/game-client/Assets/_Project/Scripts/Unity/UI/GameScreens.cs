@@ -4,6 +4,7 @@ using System.Linq;
 using HappyWorld.Core.Api;
 using Avatar = HappyWorld.Core.Api.Avatar; // UnityEngine also has an Avatar type
 using HappyWorld.Core.Localization;
+using HappyWorld.Core.Realtime;
 using HappyWorld.Core.World;
 using UnityEngine;
 using UnityEngine.UI;
@@ -19,7 +20,11 @@ namespace HappyWorld.Unity.UI
         private readonly GameSession _s;
         private readonly RectTransform _root, _screen, _hud, _modalLayer, _toastLayer;
         private RectTransform _banner;
-        private Text _nameText, _moneyText, _zoneText;
+        private Text _nameText, _moneyText, _zoneText, _cashText;
+        private Text _festivalText;
+        private Text _cityText;
+        private Image _festivalBg;
+        private float _lastSaleToast = -999f;
 
         public VirtualJoystick Joystick { get; private set; }
         public bool ModalOpen => _modalLayer.childCount > 0;
@@ -186,15 +191,35 @@ namespace HappyWorld.Unity.UI
         {
             Joystick = VirtualJoystick.Create(_hud);
 
-            var top = UiKit.Box("TopBar", _hud, new Color(1, 1, 1, 0.85f)).rectTransform.Place(new Vector2(0, 1), new Vector2(0.36f, 1), new Vector2(16, -150), new Vector2(0, -16));
+            var top = UiKit.Box("TopBar", _hud, new Color(1, 1, 1, 0.85f)).rectTransform.Place(new Vector2(0, 1), new Vector2(0.36f, 1), new Vector2(16, -200), new Vector2(0, -16));
             _nameText = UiKit.Label(top, "", 32);
-            _nameText.rectTransform.Place(new Vector2(0, 0.5f), Vector2.one, new Vector2(20, 0), new Vector2(-10, 0));
+            _nameText.rectTransform.Place(new Vector2(0, 0.66f), Vector2.one, new Vector2(20, 0), new Vector2(-10, 0));
             _moneyText = UiKit.Label(top, "", 32);
-            _moneyText.rectTransform.Place(Vector2.zero, new Vector2(1, 0.5f), new Vector2(20, 0), new Vector2(-10, 0));
+            _moneyText.rectTransform.Place(new Vector2(0, 0.33f), new Vector2(1, 0.66f), new Vector2(20, 0), new Vector2(-10, 0));
+            // Phase 5: Gold waiting in the shop's cash box (tap to manage the shop)
+            var cash = UiKit.Button(top, "", new Color(1f, 0.85f, 0.35f, 0.9f), ShowShop, 28);
+            cash.GetComponent<RectTransform>().Place(Vector2.zero, new Vector2(1, 0.33f), new Vector2(10, 6), new Vector2(-10, -2));
+            _cashText = cash.GetComponentInChildren<Text>();
+            _cashText.color = UiKit.Ink;
 
             _zoneText = UiKit.Label(_hud, "", 36, TextAnchor.UpperCenter, Color.white);
             _zoneText.gameObject.AddComponent<Shadow>();
             _zoneText.rectTransform.Place(new Vector2(0.38f, 0.9f), new Vector2(0.62f, 0.98f));
+
+            // Phase 7: Bangkok time of day, weather and season (tap for the forecast and the city's projects)
+            _cityText = UiKit.Label(_hud, "", 26, TextAnchor.UpperCenter, Color.white);
+            _cityText.gameObject.AddComponent<Shadow>();
+            _cityText.rectTransform.Place(new Vector2(0.34f, 0.765f), new Vector2(0.66f, 0.815f));
+            _cityText.raycastTarget = true; // labels are not tappable by default
+            var cityTap = _cityText.gameObject.AddComponent<Button>();
+            cityTap.onClick.AddListener(ShowCity);
+
+            // Phase 6: this week's city festival (tap for goals and rewards)
+            var fest = UiKit.Button(_hud, Texts.T("ui.festival"), new Color(1f, 0.84f, 0.31f, 0.92f), ShowFestival, 26);
+            fest.GetComponent<RectTransform>().Place(new Vector2(0.36f, 0.82f), new Vector2(0.64f, 0.895f));
+            _festivalBg = fest.GetComponent<Image>();
+            _festivalText = fest.GetComponentInChildren<Text>();
+            _festivalText.color = UiKit.Ink;
 
             var buttons = new (string key, Action open)[]
             {
@@ -204,6 +229,8 @@ namespace HappyWorld.Unity.UI
                 ("ui.bag", ShowBag),
                 ("ui.store", ShowStore),
                 ("ui.shop", ShowShop),
+                ("ui.city", ShowCity),
+                ("ui.go_market", () => _s.Run(() => _s.JoinZoneAsync("MARKET"))),
             };
             for (int i = 0; i < buttons.Length; i++)
             {
@@ -227,6 +254,13 @@ namespace HappyWorld.Unity.UI
 
         // Currency is spelled out (ทอง/เพชร): the bundled Thai font has no emoji glyphs, so 🪙/💎 rendered as
         // nothing on Android and prices showed as bare numbers (Phase 4.5).
+        /// <summary>Quest and festival rewards can level the player up; the HUD reads the cached profile, so
+        /// copy the new level in (it kept showing "Lv.1" after the server said 2, Phase 6 QA).</summary>
+        private void ApplyLevel(int? level)
+        {
+            if (level.HasValue && _s.Profile != null) _s.Profile.level = level.Value;
+        }
+
         public void RefreshHud()
         {
             var p = _s.Profile;
@@ -235,7 +269,170 @@ namespace HappyWorld.Unity.UI
             {
                 var w = await _s.Api.GetWalletAsync();
                 _moneyText.text = Texts.T("ui.gold") + " " + w.Gold + "   " + Texts.T("ui.gems") + " " + w.Gems;
+                var shops = await _s.Api.GetBusinessesAsync();
+                if (shops.Count > 0) SetCashBox(shops[0].stall);
             });
+        }
+
+        private void SetCashBox(ShopStall st)
+        {
+            if (st == null) return;
+            var state = st.status == "OPEN" ? "ร้านเปิดอยู่" : st.status == "PAUSED" ? "ร้านพักขาย" : "ร้านปิด";
+            _cashText.text = state + " · ลิ้นชัก " + st.cashBox + " ทอง";
+        }
+
+        /// <summary>shop:updated from the server: customers bought something at my stall.</summary>
+        public void OnShopUpdated(ShopUpdated u)
+        {
+            _cashText.text = "ร้านเปิดอยู่ · ลิ้นชัก " + u.cashBox + " ทอง";
+            if (u.unitsSold > 0 && Time.time - _lastSaleToast > 45f && !ModalOpen)
+            {
+                _lastSaleToast = Time.time;
+                Toast("ลูกค้าซื้อของที่ร้าน " + u.unitsSold + " ชิ้น (+" + u.revenue + " ทอง เข้าลิ้นชัก)", "ดูร้าน", ShowShop);
+            }
+        }
+
+        // ---------- city festival (Phase 6) ----------
+
+        /// <summary>Updates the HUD festival button from GET /festival.</summary>
+        public void SetFestival(FestivalState st)
+        {
+            if (_festivalText == null || st == null || st.current == null) return;
+            var f = st.current;
+            float r, g, b;
+            FestivalPresenter.ParseColor(f.color, out r, out g, out b);
+            _festivalBg.color = f.status == "UPCOMING" ? new Color(1f, 1f, 1f, 0.85f) : new Color(r, g, b, 0.92f);
+            var claimable = f.ClaimableCount() + (st.previous != null ? st.previous.ClaimableCount() : 0);
+            _festivalText.text = FestivalPresenter.Banner(f, _s.ServerNow) + (claimable > 0 ? "  <b>มีรางวัล!</b>" : "");
+        }
+
+        public void ShowFestival()
+        {
+            var list = OpenModal(Texts.T("ui.festival"));
+            Loading(list);
+            _s.Run(async () =>
+            {
+                var st = await _s.Api.GetFestivalAsync();
+                _s.OnFestival(st);
+                UiKit.Clear(list);
+                FillFestival(list, st.current, true);
+                if (st.previous != null)
+                {
+                    UiKit.Row(list, "<b>รางวัลจากเทศกาลที่แล้ว</b> (รับได้ถึงก่อนเทศกาลหน้าจบ)", 70);
+                    FillFestival(list, st.previous, false);
+                }
+            });
+        }
+
+        private void FillFestival(RectTransform list, FestivalInfo f, bool full)
+        {
+            var now = _s.ServerNow;
+            var name = FestivalPresenter.Name(f);
+            var when = f.status == "UPCOMING" ? "เริ่มวันศุกร์ · " + FestivalPresenter.TimeLeft(f.startsAt - now)
+                : f.Active ? "กำลังจัดงาน! จบ" + FestivalPresenter.TimeLeft(f.endsAt - now) : "จบแล้ว";
+            UiKit.Row(list, "<b>" + name + "</b>\n<size=24>" + when + "</size>", 110);
+
+            if (full)
+            {
+                var featured = string.Join("  ·  ", f.featured.Select(x => MarketNpcPlanner.ProductName(x.productCode) + " ลูกค้าอยากได้ x" + x.demand));
+                var shopRow = UiKit.Row(list, "<size=26>ของเทศกาล: " + featured + "\nขายของเทศกาลที่แผงในตลาด ทุกชิ้นช่วยทั้งเมือง</size>", 110);
+                UiKit.RowButton(shopRow, "จัดร้าน", UiKit.Good, ShowShop, 150);
+            }
+
+            // the city's progress, as a bar toward the next tier
+            var next = f.NextTier();
+            var cityRow = UiKit.Row(list, "<size=26>ทั้งเมืองขายของเทศกาลแล้ว <b>" + f.city.points + "</b> ชิ้น · ผู้ช่วย " + f.city.contributors + " คน" +
+                (next != null ? " · ขั้นต่อไปที่ " + next.target : " · ครบทุกขั้นแล้ว!") + "</size>", 100);
+            var track = UiKit.Box("Track", cityRow, new Color(0.88f, 0.88f, 0.9f)).rectTransform.Place(new Vector2(0, 0), new Vector2(1, 0), new Vector2(20, 10), new Vector2(-20, 26));
+            float r, g, b;
+            FestivalPresenter.ParseColor(f.color, out r, out g, out b);
+            UiKit.Box("Fill", track, new Color(r, g, b)).rectTransform.Place(Vector2.zero, new Vector2(FestivalPresenter.Progress(f), 1));
+
+            foreach (var t in f.tiers)
+            {
+                var reward = Texts.T("ui.gold") + " " + t.rewardGold + "  XP " + t.rewardXp + (t.rewardItemId != null ? "  + " + Texts.T(t.rewardItemId) : "");
+                var state = t.claimed ? "✓ " + Texts.T("ui.festival_claimed") : t.reached ? "<color=#2E8B3E>เมืองทำสำเร็จ!</color>" : "เป้า " + t.target + " ชิ้น";
+                var row = UiKit.Row(list, "ขั้น " + t.tier + " " + Texts.T("festival.tier." + t.tier) + "  <size=24>" + state + "</size>\n<size=24>" + reward + "</size>", 110);
+                var tier = t.tier;
+                var key = f.key;
+                if (t.claimable)
+                    UiKit.RowButton(row, Texts.T("ui.festival_claim"), UiKit.Good, () => _s.Run(async () =>
+                    {
+                        var res = await _s.Api.ClaimFestivalAsync(key, tier);
+                        Toast("ได้รับ " + Texts.T("ui.gold") + " " + res.rewards.gold + "  XP " + res.rewards.xp +
+                              (res.rewards.itemId != null ? "  และ " + Texts.T(res.rewards.itemId) : "") + (res.level.HasValue ? "  เลเวล " + res.level : ""));
+                        ApplyLevel(res.level);
+                        RefreshHud();
+                        ShowFestival();
+                    }), 170);
+            }
+
+            var me = f.me.points >= f.me.minToClaim
+                ? "คุณช่วยเมืองไปแล้ว <b>" + f.me.points + "</b> ชิ้น รับรางวัลทุกขั้นที่เมืองทำสำเร็จได้"
+                : "คุณช่วยไปแล้ว " + f.me.points + " ชิ้น ขายของเทศกาลให้ครบ " + f.me.minToClaim + " ชิ้นเพื่อรับรางวัลของเมือง";
+            UiKit.Row(list, "<size=26>" + me + "</size>", 80);
+
+            if (full && f.top.Count > 0)
+            {
+                UiKit.Row(list, "<b>ผู้ช่วยแห่งเมือง</b>", 60);
+                foreach (var h in f.top)
+                    UiKit.Row(list, "<size=26>" + h.rank + ". " + FestivalPresenter.HelperName(h) + " · " + h.points + " ชิ้น</size>", 60);
+            }
+        }
+
+        // ---------- living city (Phase 7) ----------
+
+        /// <summary>HUD line under the zone name: "14:05 ช่วงบ่าย · ฝนตก · หน้าฝน".</summary>
+        public void SetCityLine(string line)
+        {
+            if (_cityText != null && _cityText.text != line) _cityText.text = line;
+        }
+
+        public void ShowCity()
+        {
+            var list = OpenModal(Texts.T("ui.city"));
+            Loading(list);
+            _s.Run(async () =>
+            {
+                var now = await _s.Api.GetCityNowAsync();
+                var g = await _s.Api.GetCityGrowthAsync();
+                _s.OnCityNow(now);
+                _s.OnCityGrowth(g);
+                UiKit.Clear(list);
+                FillCity(list, now, g);
+            });
+        }
+
+        private void FillCity(RectTransform list, CityNow n, CityGrowth g)
+        {
+            // time and weather: what it means for the shop right now
+            UiKit.Row(list, "<b>" + CityLifePresenter.HudLine(n, n.hour) + "</b>\n<size=24>" + n.tipTh + "</size>", 110);
+            var sells = n.demand.Where(d => d.demand >= 1.2f).Select(d => MarketNpcPlanner.ProductName(d.productCode)).ToList();
+            var busy = n.busyTypes.Select(MarketNpcPlanner.CustomerName).ToList();
+            var line = (sells.Count > 0 ? "ตอนนี้ขายดี: " + string.Join(", ", sells) : "อากาศแบบนี้ไม่มีของที่ขายดีเป็นพิเศษ") +
+                       (busy.Count > 0 ? "\nช่วงนี้มีลูกค้าเยอะ: " + string.Join(", ", busy) : "");
+            var shopRow = UiKit.Row(list, "<size=24>" + line + "\n" + CityLifePresenter.ForecastLine(n, 3) + "</size>", 120);
+            UiKit.RowButton(shopRow, "จัดร้าน", UiKit.Good, ShowShop, 150);
+
+            // the city's projects
+            UiKit.Row(list, "<b>เมืองของเราเติบโต</b>\n<size=24>ทุกชิ้นที่ขายได้ในตลาด = 1 แต้มสร้างเมือง · ทั้งเมืองมี " + g.points + " แต้ม · สร้างแล้ว " + g.builtCount + "/" + g.projects.Count + "</size>", 100);
+            foreach (var p in g.projects)
+            {
+                var state = p.Done ? "<color=#2E8B3E>สร้างเสร็จแล้ว</color>" : p.Building ? "กำลังสร้าง " + p.progress + "/" + p.cost : "<color=#888888>รอคิว (" + p.cost + " แต้ม)</color>";
+                var row = UiKit.Row(list, "<b>" + CityLifePresenter.ProjectName(p) + "</b>  <size=24>" + state + " · " + Texts.T("zone." + p.zone.ToLowerInvariant()) + "</size>\n<size=24>" + p.effectTh + "</size>", 110);
+                if (p.Building)
+                {
+                    var track = UiKit.Box("Track", row, new Color(0.88f, 0.88f, 0.9f)).rectTransform.Place(new Vector2(0, 0), new Vector2(1, 0), new Vector2(20, 6), new Vector2(-20, 20));
+                    UiKit.Box("Fill", track, new Color(0.95f, 0.65f, 0.2f)).rectTransform.Place(Vector2.zero, new Vector2(CityLifePresenter.Progress(p), 1));
+                }
+            }
+            UiKit.Row(list, "<size=26>คุณช่วยสร้างเมืองไปแล้ว <b>" + g.me.total + "</b> แต้ม" + (g.current != null ? " (โครงการนี้ " + g.me.points + ")" : "") + "</size>", 70);
+            if (g.top.Count > 0)
+            {
+                UiKit.Row(list, "<b>ช่างใหญ่ของเมือง</b>", 60);
+                foreach (var h in g.top)
+                    UiKit.Row(list, "<size=26>" + h.rank + ". " + FestivalPresenter.HelperName(h) + " · " + h.points + " แต้ม</size>", 60);
+            }
         }
 
         // ---------- modal ----------
@@ -406,6 +603,8 @@ namespace HappyWorld.Unity.UI
                         {
                             var r = await _s.Api.ClaimQuestAsync(id);
                             Toast("ได้รับ " + Texts.T("ui.gold") + " " + r.rewards.gold + (r.rewards.gems > 0 ? " " + Texts.T("ui.gems") + " " + r.rewards.gems : "") + (r.level.HasValue ? "  เลเวล " + r.level : ""));
+                            ApplyLevel(r.level);
+                            RefreshHud();
                             ShowQuests();
                         }));
                     else if (q.canStart && q.progress == null)
@@ -464,7 +663,11 @@ namespace HappyWorld.Unity.UI
             });
         }
 
-        private void ShowShop()
+        /// <summary>
+        /// Living shop manager (Phase 5): storage → stall → NPC customers → cash box → wallet.
+        /// Every number comes from the server's Business response; the client never computes money.
+        /// </summary>
+        public void ShowShop()
         {
             var list = OpenModal(Texts.T("ui.shop"));
             Loading(list);
@@ -473,35 +676,202 @@ namespace HappyWorld.Unity.UI
                 var all = await _s.Api.GetBusinessesAsync();
                 UiKit.Clear(list);
                 if (all.Count == 0) { UiKit.Row(list, "ยังไม่มีร้าน"); return; }
-                var b = all[0];
-                UiKit.Row(list, b.name + "  Lv." + b.level + "/" + b.maxLevel + "\n<size=24>รายรับ " + b.finance.totalRevenue + " · รายจ่าย " + b.finance.totalExpense + " · กำไร " + b.finance.profit + "</size>", 110);
-                foreach (var p in b.products)
-                {
-                    var code = p.productCode;
-                    var row = UiKit.Row(list, code + "  สต็อก " + p.quantity + "/" + b.stockCapacity + "\n<size=24>ต้นทุน " + p.unitCost + " · ขาย " + p.sellPrice + " (" + p.minPrice + "–" + p.maxPrice + ")</size>", 110);
-                    UiKit.RowButton(row, "-1", UiKit.Muted, () => SetPrice(b.id, code, p.sellPrice - 1), 80);
-                    UiKit.RowButton(row, "+1", UiKit.Muted, () => SetPrice(b.id, code, p.sellPrice + 1), 80);
-                    var key = IdempotencyKeys.New();
-                    UiKit.RowButton(row, Texts.T("ui.restock") + " 5", UiKit.Primary, () => _s.Run(async () =>
-                    {
-                        await _s.Api.RestockAsync(b.id, code, 5, key);
-                        ShowShop();
-                    }), 200);
-                }
-                UiKit.RowButton(UiKit.Row(list, "ลูกค้ามาซื้อตามราคาและสต็อก"), Texts.T("ui.sell"), UiKit.Good, () => _s.Run(async () =>
-                {
-                    var r = await _s.Api.SellAsync(b.id);
-                    var tip = r.lines.SelectMany(l => l.tipsText).FirstOrDefault();
-                    Toast("ขายได้ " + r.totals.unitsSold + " ชิ้น กำไร " + r.totals.profit + (tip != null ? "\n" + tip : ""));
-                    ShowShop();
-                }), 300);
-                if (b.upgradeCost.HasValue)
-                    UiKit.RowButton(UiKit.Row(list, "อัปเกรดร้าน (" + Texts.T("ui.gold") + " " + b.upgradeCost + ")"), "อัปเกรด", UiKit.Primary, () => _s.Run(async () =>
-                    {
-                        await _s.Api.UpgradeBusinessAsync(b.id, b.level);
-                        ShowShop();
-                    }));
+                FillShop(list, all[0]);
             });
+        }
+
+        private void FillShop(RectTransform list, Business b)
+        {
+            var st = b.stall ?? new ShopStall();
+            SetCashBox(st);
+            var statusText = st.status == "OPEN" ? "<color=#2E8B3E>เปิดขายอยู่</color>" : st.status == "PAUSED" ? "<color=#C77C00>พักขาย</color>" : "<color=#888888>ปิดร้าน</color>";
+            var where = st.slot.HasValue ? " · แผงที่ " + (st.slot.Value + 1) + " ในตลาด" : st.status == "CLOSED" ? "" : " · ตลาดเต็ม ร้านยังขายได้แต่ไม่มีแผงบนแผนที่";
+            var head = UiKit.Row(list, "<b>" + b.name + "</b>  Lv." + b.level + "/" + b.maxLevel + "\n<size=24>" + statusText + where + "</size>", 110);
+            UiKit.RowButton(head, "ตั้งชื่อร้าน", UiKit.Muted, () => ShowRenameShop(b), 190);
+
+            // cash box: money from NPC customers waiting to be collected
+            var cash = UiKit.Row(list, "เงินในลิ้นชัก <b>" + st.cashBox + " ทอง</b>\n<size=24>ลูกค้าทั้งหมด " + st.totalCustomers + " คน · ขายไปแล้ว " + b.totalUnitsSold + " ชิ้น</size>", 110);
+            if (st.cashBox > 0)
+            {
+                var key = IdempotencyKeys.New(); // one key per tap: a retried request can never pay twice
+                UiKit.RowButton(cash, "เก็บเงิน", UiKit.Good, () => _s.Run(async () =>
+                {
+                    var r = await _s.Api.CollectShopAsync(b.id, key);
+                    Toast("เก็บเงินเข้ากระเป๋า " + r.collected + " ทอง");
+                    RefreshHud();
+                    UiKit.Clear(list);
+                    FillShop(list, r.business);
+                }), 190);
+            }
+            UiKit.RowButton(cash, "รายงาน", UiKit.Primary, () => _s.Run(async () => ShowShopReport(await _s.Api.GetShopReportAsync(b.id), false)), 160);
+
+            UiKit.Row(list, "<size=24>รายรับรวม " + b.finance.totalRevenue + " · รายจ่ายรวม (ซื้อของ+อัปเกรด) " + b.finance.totalExpense + " · กำไรสุทธิ " + b.finance.profit + " ทอง</size>", 70);
+
+            // open / pause / close
+            var ctrl = UiKit.Row(list, "<size=26>แผงมี " + st.shelfSlots + " ช่อง (ใช้ " + st.slotsUsed + ") · ช่องละไม่เกิน " + st.shelfCapacity + " ชิ้น\nลูกค้าเฉลี่ย " + st.customersPerMinute.ToString("0.#") + " คน/นาที · ขายเองตอนออฟไลน์ได้ถึง 8 ชม.</size>", 110);
+            if (st.status != "OPEN") UiKit.RowButton(ctrl, "เปิดร้าน", UiKit.Good, () => SetStatus(list, b.id, "OPEN"), 160);
+            if (st.status == "OPEN") UiKit.RowButton(ctrl, "พักขาย", UiKit.Muted, () => SetStatus(list, b.id, "PAUSED"), 150);
+            if (st.status != "CLOSED") UiKit.RowButton(ctrl, "ปิดร้าน", UiKit.Danger, () => SetStatus(list, b.id, "CLOSED"), 150);
+            if (st.slot.HasValue && _s.CurrentZone != null && _s.CurrentZone.id != "MARKET")
+                UiKit.RowButton(ctrl, "ไปที่แผง", UiKit.Primary, () => { CloseModal(); _s.Run(() => _s.JoinZoneAsync("MARKET")); }, 160);
+
+            // products: storage, stall, price
+            foreach (var c in b.catalog)
+            {
+                var name = MarketNpcPlanner.ProductName(c.productCode);
+                if (!c.unlocked)
+                {
+                    UiKit.Row(list, "<color=#888888>" + name + " (ล็อก) · ปลดล็อกเมื่อร้าน Lv." + c.unlockLevel + "</color>", 70);
+                    continue;
+                }
+                var p = b.products.FirstOrDefault(x => x.productCode == c.productCode);
+                int storage = p != null ? p.quantity : 0, shelf = p != null ? p.shelfQuantity : 0, price = p != null ? p.sellPrice : c.basePrice;
+                var cost = p != null && p.avgUnitCost > 0 ? p.avgUnitCost : c.unitCost;
+                var margin = price - cost;
+                var code = c.productCode;
+                var hint = FestivalPresenter.ProductHint(_s.Festival != null ? _s.Festival.current : null, code);
+                if (hint.Length > 0) name += " <color=#D35400><size=22>" + hint + "</size></color>";
+                var weatherHint = CityLifePresenter.ProductHint(_s.CityNow, code);
+                if (weatherHint.Length > 0) name += " <color=#2471A3><size=22>" + weatherHint + "</size></color>";
+                var row = UiKit.Row(list,
+                    "<b>" + name + "</b>  ขาย " + price + " ทอง <size=22>(ราคาตลาด " + c.basePrice + " · ต้นทุน " + cost + " · " + (margin > 0 ? "กำไร " + margin : "<color=#C0392B>ขาดทุน " + (-margin) + "</color>") + "/ชิ้น)</size>\n" +
+                    "<size=24>คลัง " + storage + "/" + b.stockCapacity + " · บนแผง " + shelf + "/" + st.shelfCapacity + (p != null && p.onStall ? "" : " · ยังไม่ได้วางขาย") + "</size>", 120);
+                UiKit.RowButton(row, "-1", UiKit.Muted, () => SetPrice(b.id, code, price - 1), 70);
+                UiKit.RowButton(row, "+1", UiKit.Muted, () => SetPrice(b.id, code, price + 1), 70);
+                var key = IdempotencyKeys.New();
+                UiKit.RowButton(row, "ซื้อเข้า 10", UiKit.Primary, () => _s.Run(async () =>
+                {
+                    await _s.Api.RestockAsync(b.id, code, 10, key);
+                    RefreshHud(); // restock is paid from the wallet
+                    RefreshShop(list, b.id);
+                }), 160);
+                // Both shelf buttons are always drawn (greyed out when unusable) so they never shift under the
+                // player's finger: on device a second tap on "+5" landed on "เก็บลง" and emptied the stall (Phase 5 QA).
+                var room = Math.Min(st.shelfCapacity - shelf, storage);
+                var add = UiKit.RowButton(row, "ขึ้นแผง +" + Math.Max(0, Math.Min(5, room)), UiKit.Good, () => SetShelf(list, b.id, code, shelf + Math.Min(5, room)), 160);
+                add.interactable = room > 0;
+                var remove = UiKit.RowButton(row, "เก็บลง", UiKit.Muted, () => SetShelf(list, b.id, code, 0), 120);
+                remove.interactable = shelf > 0;
+            }
+
+            if (b.upgradeCost.HasValue)
+                UiKit.RowButton(UiKit.Row(list, "อัปเกรดร้านเป็น Lv." + (b.level + 1) + " (" + Texts.T("ui.gold") + " " + b.upgradeCost + ")\n<size=24>ลูกค้ามากขึ้น แผงใหญ่ขึ้น ปลดล็อกสินค้าใหม่</size>", 110), "อัปเกรด", UiKit.Primary, () => _s.Run(async () =>
+                {
+                    await _s.Api.UpgradeBusinessAsync(b.id, b.level);
+                    RefreshHud();
+                    RefreshShop(list, b.id);
+                }));
+            UiKit.Row(list, "<size=22>" + Texts.T("ui.sim_note") + "</size>", 60);
+        }
+
+        private void RefreshShop(RectTransform list, string businessId)
+        {
+            _s.Run(async () =>
+            {
+                var b = await _s.Api.GetBusinessAsync(businessId);
+                if (list == null) return; // modal closed meanwhile
+                UiKit.Clear(list);
+                FillShop(list, b);
+            });
+        }
+
+        private void SetShelf(RectTransform list, string businessId, string code, int quantity)
+        {
+            _s.Run(async () =>
+            {
+                var b = await _s.Api.SetShelfAsync(businessId, code, quantity);
+                if (list == null) return;
+                UiKit.Clear(list);
+                FillShop(list, b);
+            });
+        }
+
+        private void SetStatus(RectTransform list, string businessId, string status)
+        {
+            _s.Run(async () =>
+            {
+                var b = await _s.Api.SetShopStatusAsync(businessId, status);
+                Toast(status == "OPEN" ? "เปิดร้านแล้ว ลูกค้าจะเริ่มเดินมาที่แผงในตลาด" : status == "PAUSED" ? "พักขายแล้ว ลูกค้าจะไม่แวะมาจนกว่าจะเปิดใหม่" : "ปิดร้านแล้ว");
+                _s.RefreshMarket();
+                if (list == null) return;
+                UiKit.Clear(list);
+                FillShop(list, b);
+            });
+        }
+
+        private void ShowRenameShop(Business b)
+        {
+            var panel = OpenModal("ตั้งชื่อร้าน", false);
+            UiKit.Label(panel, "<size=26>ชื่อร้านจะแสดงให้ผู้เล่นวัยเดียวกันเห็นในตลาด ห้ามใส่เบอร์โทร ลิงก์ หรือคำไม่สุภาพ</size>", 30, TextAnchor.MiddleLeft)
+                .rectTransform.Place(new Vector2(0.04f, 0.7f), new Vector2(0.96f, 0.9f));
+            var input = UiKit.Input(panel, "เช่น ร้านน้ำมะนาวสดใส", 20);
+            input.text = b.name;
+            input.GetComponent<RectTransform>().Place(new Vector2(0.04f, 0.5f), new Vector2(0.96f, 0.64f));
+            UiKit.Button(panel, Texts.T("ui.save"), UiKit.Good, () => _s.Run(async () =>
+            {
+                await _s.Api.RenameShopAsync(b.id, input.text.Trim());
+                Toast("ตั้งชื่อร้านแล้ว");
+                _s.RefreshMarket();
+                ShowShop();
+            }), 36).GetComponent<RectTransform>().Place(new Vector2(0.3f, 0.2f), new Vector2(0.7f, 0.34f));
+        }
+
+        /// <summary>"While you were away" report. Shown after sign-in when there is news, or from the shop.</summary>
+        public void ShowShopReport(ShopReport r, bool welcomeBack)
+        {
+            var list = OpenModal(welcomeBack ? "ระหว่างที่คุณไม่อยู่..." : "รายงานร้าน");
+            var profit = r.profit >= 0 ? "กำไร <b>" + r.profit + "</b> ทอง" : "<color=#C0392B>ขาดทุน " + (-r.profit) + " ทอง</color>";
+            UiKit.Row(list, "<b>" + r.shopName + "</b>\n<size=24>ตั้งแต่ " + r.since.ToLocalTime().ToString("d MMM HH:mm") + "</size>", 100);
+            if (!r.hasNews)
+            {
+                UiKit.Row(list, "ยังไม่มีลูกค้าใหม่ตั้งแต่ครั้งที่แล้ว");
+            }
+            else
+            {
+                UiKit.Row(list, "ลูกค้าแวะมา <b>" + r.customers + "</b> คน · ซื้อ <b>" + r.buyers + "</b> คน\nขายได้ " + r.unitsSold + " ชิ้น · รายรับ " + r.revenue + " · ต้นทุนของ " + r.costOfGoods + " · " + profit, 110);
+                UiKit.Row(list, "<size=26>ลูกค้าที่พลาดไป: แพงเกินงบ " + r.lostTooExpensive + " คน · ของหมด " + r.lostSoldOut + " คน · หาของที่ร้านไม่มี " + r.lostNotSelling + " คน</size>", 80);
+                if (r.bestSeller != null) UiKit.Row(list, "ขายดีที่สุด: <b>" + MarketNpcPlanner.ProductName(r.bestSeller) + "</b>", 70);
+                foreach (var p in r.products.Where(x => x.wanted > 0 || x.onStall))
+                    UiKit.Row(list, "<size=24>" + MarketNpcPlanner.ProductName(p.productCode) + (p.price.HasValue ? " (" + p.price + " ทอง)" : " (ไม่ได้วางขาย)") + ": ขาย " + p.unitsSold + " · กำไร " + p.profit +
+                        " · คนอยากได้ " + p.wanted + " · แพงไป " + p.lostTooExpensive + " · หมด " + p.lostSoldOut + (p.onStall ? " · เหลือบนแผง " + p.shelfLeft : "") + "</size>", 80);
+            }
+            foreach (var t in r.tips) UiKit.Row(list, "<color=#2D6CDF>คำแนะนำ:</color> " + t.textTh, 90);
+            var actions = UiKit.Row(list, r.cashBox > 0 ? "เงินรออยู่ในลิ้นชัก " + r.cashBox + " ทอง" : "", 100);
+            if (r.cashBox > 0)
+            {
+                var key = IdempotencyKeys.New();
+                UiKit.RowButton(actions, "เก็บเงิน", UiKit.Good, () => _s.Run(async () =>
+                {
+                    var c = await _s.Api.CollectShopAsync(r.businessId, key);
+                    Toast("เก็บเงินเข้ากระเป๋า " + c.collected + " ทอง");
+                    RefreshHud(); // the welcome-back report collected into the wallet; HUD showed the old total (Phase 5 QA)
+                    ShowShop();
+                }), 180);
+            }
+            UiKit.RowButton(actions, "จัดร้าน", UiKit.Primary, ShowShop, 160);
+            // seen: the next report starts from here (sales after `until` stay for next time)
+            if (r.untilIso != null) _s.Run(() => _s.Api.AckShopReportAsync(r.businessId, r.untilIso));
+        }
+
+        /// <summary>Tapping a stall in the market.</summary>
+        public void ShowStallInfo(MarketStall s)
+        {
+            var list = OpenModal(s.name);
+            UiKit.Row(list, "โดย " + s.ownerName + " · ร้าน Lv." + s.level + " · " + (s.status == "OPEN" ? "เปิดขาย" : "พักขาย"), 80);
+            foreach (var p in s.products)
+                UiKit.Row(list, MarketNpcPlanner.ProductName(p.productCode) + "  " + p.price + " ทอง  " + (p.shelfQuantity > 0 ? "เหลือ " + p.shelfQuantity : "หมด"), 70);
+            if (s.isMine)
+            {
+                UiKit.RowButton(UiKit.Row(list, "นี่คือร้านของคุณ"), "จัดร้าน", UiKit.Primary, ShowShop);
+                return;
+            }
+            UiKit.RowButton(UiKit.Row(list, "ชมร้านนี้"), "ร้านสวยจัง", UiKit.Good, () => { CloseModal(); _s.Run(() => _s.SendPresetAsync("NICE_SHOP")); });
+            UiKit.RowButton(UiKit.Row(list, "ชื่อร้านไม่เหมาะสม"), Texts.T("ui.report"), UiKit.Danger, () => _s.Run(async () =>
+            {
+                await _s.Api.ReportAsync(s.ownerId, "INAPPROPRIATE_NAME", "MARKET_STALL");
+                Toast(Texts.T("ui.reported_done"));
+                CloseModal();
+            }));
         }
 
         private void SetPrice(string businessId, string code, int price)
@@ -509,6 +879,7 @@ namespace HappyWorld.Unity.UI
             _s.Run(async () =>
             {
                 await _s.Api.SetPriceAsync(businessId, code, price);
+                _s.RefreshMarket();
                 ShowShop();
             });
         }

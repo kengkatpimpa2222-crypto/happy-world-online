@@ -24,6 +24,15 @@ export const envSchema = z.object({
   RATE_LIMIT_FRIEND_REQUESTS_PER_HOUR: z.coerce.number().int().positive().default(30),
   RATE_LIMIT_REPORTS_PER_HOUR: z.coerce.number().int().positive().default(20),
   BUSINESS_SALE_COOLDOWN_SECONDS: z.coerce.number().int().min(0).default(30),
+  /** How often open market stalls are settled in the background (NPC customers). 0 = only on demand. */
+  LIVING_SHOP_SETTLE_INTERVAL_SECONDS: z.coerce.number().int().min(0).default(20),
+  /**
+   * Dev/QA only: shifts the festival calendar (hours) so a festival can be tried on any weekday.
+   * Must be 0 in production.
+   */
+  FESTIVAL_CLOCK_OFFSET_HOURS: z.coerce.number().min(-24 * 7 * 52).max(24 * 7 * 52).default(0),
+  /** Dev/QA only (Phase 7): force the city weather (SUNNY | HOT | CLOUDY | RAIN). Empty = real weather. */
+  CITY_WEATHER_OVERRIDE: z.preprocess((v) => (v === '' ? undefined : v), z.enum(['SUNNY', 'HOT', 'CLOUDY', 'RAIN']).optional()),
 });
 
 export type Env = z.infer<typeof envSchema>;
@@ -40,6 +49,8 @@ export function validateEnv(raw: Record<string, unknown>): Env {
     if (/dev-only|test-only|change-me/i.test(env.JWT_ACCESS_SECRET)) {
       throw new Error('JWT_ACCESS_SECRET looks like a development placeholder');
     }
+    if (env.FESTIVAL_CLOCK_OFFSET_HOURS !== 0) throw new Error('FESTIVAL_CLOCK_OFFSET_HOURS must be 0 in production');
+    if (env.CITY_WEATHER_OVERRIDE) throw new Error('CITY_WEATHER_OVERRIDE is not allowed in production');
   }
   return env;
 }

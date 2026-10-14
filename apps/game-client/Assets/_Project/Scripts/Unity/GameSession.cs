@@ -44,6 +44,26 @@ namespace HappyWorld.Unity
         private int _autoRetries;
         private float _joinedAt;
         private string _wantZone = "PLAZA";
+        private MarketView _market;
+        private float _marketRefreshAt = -1f;
+        private bool _marketLoading;
+        private const float MarketResyncSeconds = 30f;
+        // Phase 6: city festival
+        public FestivalState Festival { get; private set; }
+        private float _festivalFetchedAt;
+        private float _festivalRefreshAt = -1f;
+        private bool _festivalLoading;
+        private FestivalDecor _decor;
+        private const float FestivalResyncSeconds = 60f;
+        // Phase 7: the living city (time of day, weather, city projects)
+        public CityNow CityNow { get; private set; }
+        public CityGrowth Growth { get; private set; }
+        private float _cityNowFetchedAt;
+        private float _cityNowRefreshAt = -1f, _growthRefreshAt = -1f, _cityLineAt;
+        private bool _cityNowLoading, _growthLoading;
+        private CityAmbience _ambience;
+        private CityProjectsView _projects;
+        private const float CityNowResyncSeconds = 600f;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Boot()
@@ -115,6 +135,7 @@ namespace HappyWorld.Unity
                 sun.transform.rotation = Quaternion.Euler(50, -30, 0);
             }
             RenderSettings.ambientLight = new Color(0.6f, 0.6f, 0.65f);
+            _ambience = CityAmbience.Create(transform);
 
             _zoneRoot = new GameObject("Zone").transform;
             _playersRoot = new GameObject("Players").transform;
@@ -237,6 +258,19 @@ namespace HappyWorld.Unity
             if (_local == null) SpawnLocalPlayer();
             _ui.ShowHud();
             await ConnectRealtimeAsync();
+            RefreshFestival();
+            RefreshCityNow();
+            RefreshGrowth();
+            Run(ShowWelcomeBackReportAsync);
+        }
+
+        /// <summary>Living shop: if customers came while the player was away, show what happened.</summary>
+        private async Task ShowWelcomeBackReportAsync()
+        {
+            var shops = await Api.GetBusinessesAsync();
+            if (shops.Count == 0 || shops[0].stall == null || (shops[0].stall.status == "CLOSED" && shops[0].stall.cashBox == 0)) return;
+            var report = await Api.GetShopReportAsync(shops[0].id);
+            if (report.hasNews && !_ui.ModalOpen) _ui.ShowShopReport(report, true);
         }
 
         private void SpawnLocalPlayer()
@@ -251,6 +285,7 @@ namespace HappyWorld.Unity
             var follow = Camera.main.gameObject.GetComponent<CameraFollow>();
             if (follow == null) follow = Camera.main.gameObject.AddComponent<CameraFollow>(); // no ?? on Unity objects
             follow.Target = go.transform;
+            _ambience.Target = go.transform;
         }
 
         private async Task ConnectRealtimeAsync()
@@ -279,6 +314,32 @@ namespace HappyWorld.Unity
             Rt.FriendOnline += id => MarkFriend(id, true);
             Rt.FriendInvited += inv => _ui.Toast(inv.displayName + " ชวนคุณไป " + Texts.T("zone." + (inv.zone ?? "plaza").ToLowerInvariant()),
                 "ไปเลย", () => Run(() => JoinZoneAsync(inv.zone ?? "PLAZA")));
+            Rt.MarketActivity += a =>
+            {
+                if (_market != null) _market.OnActivity(a);
+            };
+            Rt.MarketStallChanged += _ =>
+            {
+                if (_market != null) _marketRefreshAt = Time.time + 0.8f; // batch several changes into one GET
+            };
+            Rt.ShopUpdated += u =>
+            {
+                _ui.OnShopUpdated(u);
+                if (u.festivalPoints > 0) _festivalRefreshAt = Time.time + 2f; // my sales moved the city's progress
+                // my sales also build the city; the scaffold only needs an occasional refresh
+                if (u.cityPoints > 0 && (_growthRefreshAt < 0 || _growthRefreshAt > Time.time + 20f)) _growthRefreshAt = Time.time + 20f;
+            };
+            Rt.FestivalMilestone += m =>
+            {
+                if (_decor != null) _decor.Celebrate(m.tier);
+                _ui.Toast(FestivalPresenter.MilestoneText(m.tier), "ดูรางวัล", () => _ui.ShowFestival());
+                RefreshFestival();
+            };
+            Rt.CityGrowth += e =>
+            {
+                _ui.Toast(CityLifePresenter.BuiltText(e), Texts.T("ui.city"), () => _ui.ShowCity());
+                RefreshGrowth();
+            };
             Rt.SessionReplaced += () =>
             {
                 _replaced = true;
@@ -341,7 +402,18 @@ namespace HappyWorld.Unity
         {
             CurrentZone = Layout.zones.FirstOrDefault(z => z.id == s.zone);
             if (CurrentZone == null) return;
-            _portals = CityBuilder.Build(CurrentZone, _zoneRoot);
+            _portals = CityBuilder.Build(CurrentZone, _zoneRoot); // also removes the previous zone's market view
+            _market = null;
+            if (CurrentZone.id == "MARKET")
+            {
+                _market = MarketView.Create(_zoneRoot);
+                RefreshMarket();
+            }
+            _decor = FestivalDecor.Create(_zoneRoot, CurrentZone);
+            _decor.Apply(Festival != null ? Festival.current : null);
+            _ambience.BuildLamps(CurrentZone, _zoneRoot);
+            _projects = CityProjectsView.Create(_zoneRoot, CurrentZone);
+            _projects.Apply(Growth);
             _local.Width = CurrentZone.width;
             _local.Height = CurrentZone.height;
             _local.Teleport(s.you.x, s.you.y);
@@ -380,6 +452,125 @@ namespace HappyWorld.Unity
             }
         }
 
+        /// <summary>Re-reads GET /market when standing in the market (after my shop changed, or a stall-changed event).</summary>
+        public void RefreshMarket()
+        {
+            if (_market == null || _marketLoading) return;
+            _marketLoading = true;
+            _marketRefreshAt = Time.time + MarketResyncSeconds; // periodic resync corrects any drift in shelf counts
+            Run(async () =>
+            {
+                try
+                {
+                    var state = await Api.GetMarketAsync();
+                    if (_market != null) _market.Apply(state);
+                }
+                finally
+                {
+                    _marketLoading = false;
+                }
+            });
+        }
+
+        /// <summary>The server's clock (UTC), from the last GET /festival plus the time since.</summary>
+        public DateTime ServerNow => Festival != null
+            ? Festival.now.ToUniversalTime().AddSeconds(Time.realtimeSinceStartup - _festivalFetchedAt)
+            : DateTime.UtcNow;
+
+        /// <summary>Re-reads GET /festival: HUD banner, city decorations, shop hints.</summary>
+        public void RefreshFestival()
+        {
+            if (_festivalLoading || Api == null) return;
+            _festivalLoading = true;
+            _festivalRefreshAt = Time.time + FestivalResyncSeconds;
+            Run(async () =>
+            {
+                try
+                {
+                    OnFestival(await Api.GetFestivalAsync());
+                }
+                finally
+                {
+                    _festivalLoading = false;
+                }
+            });
+        }
+
+        /// <summary>Applies a fresh festival state (also called by the festival panel).</summary>
+        public void OnFestival(FestivalState st)
+        {
+            if (st == null || st.current == null) return;
+            Festival = st;
+            _festivalFetchedAt = Time.realtimeSinceStartup;
+            _ui.SetFestival(st);
+            if (_decor != null) _decor.Apply(st.current);
+            // refresh right when the festival starts or ends, so the city changes on time
+            var now = ServerNow;
+            var edge = st.current.status == "UPCOMING" ? st.current.startsAt : st.current.endsAt;
+            var untilEdge = (float)(edge.ToUniversalTime() - now).TotalSeconds + 2f;
+            if (untilEdge > 0 && untilEdge < FestivalResyncSeconds) _festivalRefreshAt = Time.time + untilEdge;
+        }
+
+        // ---------- living city (Phase 7) ----------
+
+        /// <summary>The city's Bangkok hour now (server hour plus the time since it was read).</summary>
+        public float CityHour => CityLifePresenter.LocalHour(CityNow, Time.realtimeSinceStartup - _cityNowFetchedAt);
+
+        /// <summary>Re-reads GET /city/now: sky, lamps, rain, HUD line, shop hints.</summary>
+        public void RefreshCityNow()
+        {
+            if (_cityNowLoading || Api == null) return;
+            _cityNowLoading = true;
+            _cityNowRefreshAt = Time.time + CityNowResyncSeconds;
+            Run(async () =>
+            {
+                try
+                {
+                    OnCityNow(await Api.GetCityNowAsync());
+                }
+                finally
+                {
+                    _cityNowLoading = false;
+                }
+            });
+        }
+
+        public void OnCityNow(CityNow n)
+        {
+            if (n == null) return;
+            CityNow = n;
+            _cityNowFetchedAt = Time.realtimeSinceStartup;
+            // the weather changes every 3 hours: read it again right after the change
+            var untilChange = (float)(n.nextChangeAt.ToUniversalTime() - n.now.ToUniversalTime()).TotalSeconds + 3f;
+            if (untilChange > 0 && untilChange < CityNowResyncSeconds) _cityNowRefreshAt = Time.time + untilChange;
+        }
+
+        /// <summary>Re-reads GET /city/growth: buildings and scaffold in the current zone.</summary>
+        public void RefreshGrowth()
+        {
+            if (_growthLoading || Api == null) return;
+            _growthLoading = true;
+            _growthRefreshAt = -1f;
+            Run(async () =>
+            {
+                try
+                {
+                    OnCityGrowth(await Api.GetCityGrowthAsync());
+                }
+                finally
+                {
+                    _growthLoading = false;
+                }
+            });
+        }
+
+        public void OnCityGrowth(CityGrowth g)
+        {
+            if (g == null) return;
+            Growth = g;
+            if (_projects != null) _projects.Apply(g);
+        }
+
         /// <summary>Called after the local player blocks someone: they disappear at once.</summary>
         public void HidePlayer(string userId) => City.Hide(userId);
 
@@ -391,6 +582,19 @@ namespace HappyWorld.Unity
             _local = null;
             _localView = null;
             Rt = null;
+            Festival = null;
+            _festivalRefreshAt = -1f;
+            _decor = null;
+            CityNow = null;
+            Growth = null;
+            _cityNowRefreshAt = -1f;
+            _growthRefreshAt = -1f;
+            _projects = null;
+            if (_ambience != null)
+            {
+                _ambience.Target = null;
+                _ambience.Apply(12f, "SUNNY"); // back to a plain sky (and no rain) on the login screen
+            }
         }
 
         public string PresetText(string id)
@@ -425,6 +629,21 @@ namespace HappyWorld.Unity
                     v.transform.rotation = Quaternion.Euler(0, MovementLimiter.DirToYawDegrees(p.Dir), 0);
             }
 
+            if (_market != null && _marketRefreshAt > 0 && Time.time >= _marketRefreshAt) RefreshMarket();
+            if (_festivalRefreshAt > 0 && Time.time >= _festivalRefreshAt) RefreshFestival();
+            if (_cityNowRefreshAt > 0 && Time.time >= _cityNowRefreshAt) RefreshCityNow();
+            if (_growthRefreshAt > 0 && Time.time >= _growthRefreshAt) RefreshGrowth();
+            if (CityNow != null)
+            {
+                var hour = CityHour;
+                _ambience.Apply(hour, CityNow.weather);
+                if (Time.time >= _cityLineAt)
+                {
+                    _cityLineAt = Time.time + 1f;
+                    _ui.SetCityLine(CityLifePresenter.HudLine(CityNow, hour));
+                }
+            }
+
             if (_local == null || CurrentZone == null || !Rt.Connected) return;
             _local.InputEnabled = !_ui.ModalOpen;
 
@@ -451,7 +670,7 @@ namespace HappyWorld.Unity
             HandleTap();
         }
 
-        /// <summary>Tap/click on another player opens their actions (add friend, block, report).</summary>
+        /// <summary>Tap/click on another player opens their actions (add friend, block, report); on a market stall, its details.</summary>
         private void HandleTap()
         {
             if (!Input.GetMouseButtonDown(0) || _ui.ModalOpen) return;
@@ -464,6 +683,12 @@ namespace HappyWorld.Unity
             var ray = Camera.main.ScreenPointToRay(Input.mousePosition);
             RaycastHit hit;
             if (!Physics.Raycast(ray, out hit, 200f, ~0, QueryTriggerInteraction.Collide)) return;
+            var stall = hit.collider.GetComponentInParent<StallView>();
+            if (stall != null && stall.Data != null)
+            {
+                _ui.ShowStallInfo(stall.Data);
+                return;
+            }
             var view = hit.collider.GetComponentInParent<AvatarView>();
             if (view == null || view.UserId == Profile.userId) return;
             var p = City.Get(view.UserId);

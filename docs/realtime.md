@@ -38,6 +38,11 @@ socket.on('ready', () => socket.emitWithAck('zone:join', { zone: 'PLAZA' }));
 | `friend:request` / `friend:accepted` | คำขอเพื่อนใหม่ / ตอบรับแล้ว |
 | `friend:invited` | `{ fromUserId, displayName, activity, zone }` |
 | `session:replaced` | ถูกแทนที่ด้วยการเชื่อมต่อใหม่ |
+| `market:activity` | (Phase 5) ส่งให้ทุกคนในโซน MARKET ของ age band เดียวกับแผง: `{ slot, businessId, tick, tickSeconds, visits: [{ index, customerType, productCode, outcome, quantity }] }` ลูกค้า NPC ของนาทีล่าสุด (สูงสุด 8 คน) `outcome` = `BOUGHT \| TOO_EXPENSIVE \| SOLD_OUT \| NOT_SELLING` |
+| `market:stall` | (Phase 5) `{ slot }` แผงเปิด/พัก/ปิด/เปลี่ยนของหรือราคา ให้ client โหลด `GET /market` ใหม่ |
+| `shop:updated` | (Phase 5) ส่งให้เจ้าของร้านเท่านั้น: `{ businessId, cashBox, customers, buyers, unitsSold, revenue, stall: [{ productCode, shelfQuantity }], festivalPoints, cityPoints }` (`festivalPoints` เพิ่มใน Phase 6 = สินค้าเทศกาลที่ขายได้ในรอบนี้, `cityPoints` เพิ่มใน Phase 7 = แต้มสร้างเมืองจากรอบนี้) ตั้งแต่ Phase 7 ส่งด้วยเมื่อร้านถูกคิดบัญชีตอนเจ้าของตั้งราคา/เติมของ/อัปเกรด |
+| `festival:milestone` | (Phase 6) ส่งให้ทุกคนในทุกโซนของเมืองช่วงอายุเดียวกัน เมื่อการขายทำให้เมืองถึงขั้นใหม่: `{ festivalKey, code, tier, points }` client ประดับเมืองเพิ่มและจุดพลุ |
+| `city:growth` | (Phase 7) ส่งให้ทุกคนในทุกโซนของเมืองช่วงอายุเดียวกัน เมื่อการขายทำให้โครงการเมืองสร้างเสร็จ: `{ projectCode, nameTh, effectTh, index, points, next }` client สร้างตึกใหม่และขึ้นข้อความ |
 
 `PublicPlayer = { userId, displayName, level, avatar, x, y, dir }` ไม่มี friend code, อีเมล หรือช่วงอายุ
 

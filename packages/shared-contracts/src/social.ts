@@ -101,6 +101,7 @@ export const REPORT_CONTEXT_CODES = [
   'AVATAR',
   'HOME_VISIT',
   'MINIGAME',
+  'MARKET_STALL',
 ] as const;
 
 // ---------- REST schemas ----------
@@ -162,5 +163,18 @@ export const WsEvent = {
   FRIEND_REQUEST_ACCEPTED: 'friend:accepted',
   FRIEND_INVITED: 'friend:invited',
   SESSION_REPLACED: 'session:replaced',
+  // Phase 5: living shop
+  /** NPC customer visits at stalls, sent to players in the MARKET zone of the same age band */
+  MARKET_ACTIVITY: 'market:activity',
+  /** a stall opened, paused, closed or changed its goods: clients re-fetch GET /market */
+  MARKET_STALL_CHANGED: 'market:stall',
+  /** to the owner only: cash box / shelf changed after customers bought something */
+  SHOP_UPDATED: 'shop:updated',
+  // Phase 6: city festivals
+  /** the city (age band) reached a festival tier: every zone of that age band */
+  FESTIVAL_MILESTONE: 'festival:milestone',
+  // Phase 7: time dimension
+  /** a city project was finished: every zone of that age band (clients add the building) */
+  CITY_GROWTH: 'city:growth',
   ERROR: 'error:app',
 } as const;

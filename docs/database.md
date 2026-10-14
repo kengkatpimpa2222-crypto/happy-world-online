@@ -37,6 +37,34 @@ Schema: [`apps/backend/prisma/schema.prisma`](../apps/backend/prisma/schema.pris
 - เพิ่ม `pair_key` แบบปลอดภัยกับข้อมูลเดิม: เพิ่มคอลัมน์ → เติมค่าจากข้อมูลเดิม → ตั้ง NOT NULL → ยกเลิกคำขอค้างที่ซ้ำ (ถ้ามี) ก่อนสร้าง unique index
 - **Partial index ไม่อยู่ใน schema.prisma** (Prisma ยังไม่รองรับ) แต่ตรวจแล้วว่า `prisma migrate dev` ไม่สร้าง migration ลบมัน ถ้าวันหนึ่ง migration ใหม่มีคำสั่ง `DROP INDEX "friend_requests_one_pending_per_pair"` หรือ `"moderation_reports_one_open_per_reason"` ให้ลบบรรทัดนั้นออก
 
+## Migration ของ Phase 5 (`*_phase5_living_shop`)
+
+- เพิ่มอย่างเดียว ไม่แก้ข้อมูลเดิม: ร้านเดิมทั้งหมดเริ่มเป็น `CLOSED` แผงว่าง `cash_box = 0`
+- `businesses`: `shop_status`, `stall_slot` + `market_age_band` (ตำแหน่งแผงในตลาดของ age band นั้น), `cash_box` (เงินจากลูกค้า NPC ที่ยังไม่เก็บ), `settled_tick` (นาทีล่าสุดที่คำนวณลูกค้าแล้ว), `opened_at`, `report_seen_at`, `total_customers`
+- `business_inventory`: `shelf_quantity` (บนแผง แยกจาก `quantity` ในคลัง), `on_stall`
+- ตารางใหม่ `shop_settlements` = สรุปลูกค้าต่อการคำนวณ 1 ครั้ง ใช้ทำรายงานเมื่อกลับเข้าเกม
+- CHECK: `cash_box >= 0`, `shelf_quantity >= 0`, ค่าในสรุปไม่ติดลบ
+- **Partial unique index `businesses_one_shop_per_stall`** `(market_age_band, stall_slot) WHERE stall_slot IS NOT NULL` อยู่ใน migration SQL เท่านั้น ตรวจแล้วว่า `prisma migrate diff` ไม่สร้างคำสั่งลบ ถ้า migration ใหม่มี `DROP INDEX "businesses_one_shop_per_stall"` ให้ลบบรรทัดนั้นออก
+- เงินจากลูกค้า NPC เข้า `cash_box` ก่อน (ไม่ใช่ wallet) จึงไม่มีแถว ledger จนกว่าผู้เล่นกด "เก็บเงิน" ซึ่งเขียน `wallet_transactions` ประเภท `BUSINESS_SALE`, `reference_type = 'shop-collect'`
+
+## Migration ของ Phase 6 (`*_phase6_city_festival`)
+
+- เพิ่มอย่างเดียว: enum `WalletTransactionType.FESTIVAL_REWARD`, `QuestObjectiveType.FESTIVAL_CONTRIBUTE`
+- `festival_city_progress` (PK `festival_key, age_band`): แต้มรวมและจำนวนผู้ช่วยของแต่ละเมือง (แยกช่วงอายุ)
+- `festival_contributions` (PK `festival_key, user_id`): แต้มของผู้เล่นแต่ละคน บวกใน transaction เดียวกับการคิดบัญชีร้าน (lock แผงก่อน แล้วค่อยแถวของเมือง ลำดับเดียวกันเสมอ จึงไม่ deadlock)
+- `festival_reward_claims` (PK `festival_key, user_id, tier`): กันรับรางวัลซ้ำ เงินรางวัลเขียน `wallet_transactions` ประเภท `FESTIVAL_REWARD`, `reference_type = 'festival'`, `reference_id = '<key>:<tier>'`
+- CHECK: แต้มไม่ติดลบ, `tier` 1-3
+- ไม่มีตารางปฏิทิน: เทศกาลของแต่ละสัปดาห์คำนวณจากเวลา `festival_key` เช่น `BAKERY-41` = งานขนมอบ สัปดาห์ที่ 41 นับจาก 5 ม.ค. 2026
+
+## Migration ของ Phase 7 (`*_phase7_city_growth`)
+
+- เพิ่มอย่างเดียว ไม่แตะตารางเดิม
+- `city_growth` (PK `age_band`): แต้มสร้างเมืองรวมของแต่ละเมือง ทุกชิ้นที่ร้านในตลาดขายได้ = 1 แต้ม บวกใน transaction เดียวกับการคิดบัญชีร้าน (lock แผง → แถวเทศกาล → แถวเมือง ลำดับเดียวกันเสมอ)
+- `city_project_completions` (PK `age_band, project_code`): โครงการที่สร้างเสร็จพร้อม `completed_at` ผลกับตลาดเริ่มจากเวลานี้ (การคิดบัญชีย้อนหลังของร้านที่ออฟไลน์จะไม่ได้ผลก่อนเวลาที่สร้างเสร็จ)
+- `city_builder_contributions` (PK `project_code, user_id`): แต้มที่ผู้เล่นแต่ละคนช่วยสร้างแต่ละโครงการ ถ้าการขายรอบเดียวคร่อมสองโครงการ แต้มจะถูกแบ่งให้ถูกโครงการ
+- CHECK: แต้มไม่ติดลบ
+- ไม่มีตารางอากาศหรือรายการโครงการ: อากาศคำนวณจากเวลา รายการโครงการอยู่ใน `packages/shared-contracts/src/city-growth.ts`
+
 ## ข้อควรรู้
 
 - `wallet_transactions` ลบไม่ได้โดยออกแบบ การลบบัญชีผู้เล่น (สิทธิ์ตาม PDPA) ให้ทำแบบ anonymize/soft delete (`users.status = DELETED`, ล้างอีเมลและชื่อ) แทนการ hard delete

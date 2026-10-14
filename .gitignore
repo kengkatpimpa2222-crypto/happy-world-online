@@ -26,3 +26,4 @@ apps/game-client/*.csproj
 apps/game-client/*.sln
 apps/game-client/.utmp/
 apps/game-client/*.slnx
+dump.rdb
