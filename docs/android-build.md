@@ -1,6 +1,6 @@
 # Android Build
 
-> **ยังไม่มีการ build APK/AAB** เครื่องที่ใช้พัฒนา Phase 1–2 ไม่มี Unity Editor และ Android SDK
+> Phase 4.5: build development APK ผ่านแล้วด้วย Unity 6000.0.84f1 (ดู [phase-4-5-report.md](phase-4-5-report.md)) ยังไม่มี release build หรือ AAB
 
 ## สิ่งที่ต้องติดตั้ง (Phase 4)
 

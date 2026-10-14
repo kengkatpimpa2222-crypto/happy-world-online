@@ -3,7 +3,7 @@
 เกมโลกออนไลน์แนว Social + Life Simulation + Business Simulation สำหรับทุกวัย เริ่มที่ Android ในประเทศไทย
 
 > สถานะปัจจุบัน: **Phase 1–3 เสร็จและผ่านการทดสอบแล้ว** (Foundation, Core Game API, Multiplayer: เพื่อน บล็อก รายงาน WebSocket เมืองออนไลน์)
-> **Phase 4 (Unity client)**: เขียนโค้ดครบและทดสอบส่วน C# Core กับ backend จริงแล้ว แต่ยังไม่ได้เปิดใน Unity Editor หรือ build APK ดู [docs/phase-4-report.md](docs/phase-4-report.md) และ [docs/unity-client.md](docs/unity-client.md)
+> **Phase 4 (Unity client)**: เปิดด้วย Unity 6000.0.84f1 (Unity 6 LTS) compile ผ่าน, build Android APK (development) ผ่าน และ QA บน Android emulator ครบ 14 ข้อแล้ว (Phase 4.5) ยังไม่ได้ทดสอบบนมือถือจริง ดู [docs/phase-4-5-report.md](docs/phase-4-5-report.md), [docs/phase-4-report.md](docs/phase-4-report.md) และ [docs/unity-client.md](docs/unity-client.md)
 
 ## โครงสร้างโปรเจกต์
 

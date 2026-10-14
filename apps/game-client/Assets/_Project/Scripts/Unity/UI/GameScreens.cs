@@ -211,7 +211,7 @@ namespace HappyWorld.Unity.UI
                 UiKit.Button(_hud, Texts.T(b.key), UiKit.Primary, () => b.open(), 30).GetComponent<RectTransform>()
                     .Place(new Vector2(1, 1), new Vector2(1, 1), new Vector2(-230, -110 - i * 104), new Vector2(-16, -16 - i * 104));
             }
-            UiKit.Button(_hud, Texts.T("ui.chat") + " 💬", UiKit.Good, ShowChat, 36).GetComponent<RectTransform>()
+            UiKit.Button(_hud, Texts.T("ui.chat"), UiKit.Good, ShowChat, 36).GetComponent<RectTransform>()
                 .Place(new Vector2(1, 0), new Vector2(1, 0), new Vector2(-300, 40), new Vector2(-40, 170));
         }
 
@@ -225,6 +225,8 @@ namespace HappyWorld.Unity.UI
 
         public void SetZone(string name) => _zoneText.text = name;
 
+        // Currency is spelled out (ทอง/เพชร): the bundled Thai font has no emoji glyphs, so 🪙/💎 rendered as
+        // nothing on Android and prices showed as bare numbers (Phase 4.5).
         public void RefreshHud()
         {
             var p = _s.Profile;
@@ -232,7 +234,7 @@ namespace HappyWorld.Unity.UI
             _s.Run(async () =>
             {
                 var w = await _s.Api.GetWalletAsync();
-                _moneyText.text = "🪙 " + w.Gold + "   💎 " + w.Gems;
+                _moneyText.text = Texts.T("ui.gold") + " " + w.Gold + "   " + Texts.T("ui.gems") + " " + w.Gems;
             });
         }
 
@@ -396,14 +398,14 @@ namespace HappyWorld.Unity.UI
                 {
                     var status = q.progress == null ? "" : q.progress.status == "CLAIMED" ? "✓ รับแล้ว"
                         : q.progress.value + "/" + q.objective.target;
-                    var reward = "🪙" + q.rewards.gold + (q.rewards.gems > 0 ? "  💎" + q.rewards.gems : "") + "  XP " + q.rewards.xp;
+                    var reward = Texts.T("ui.gold") + " " + q.rewards.gold + (q.rewards.gems > 0 ? "  " + Texts.T("ui.gems") + " " + q.rewards.gems : "") + "  XP " + q.rewards.xp;
                     var row = UiKit.Row(list, Texts.T(q.id) + "  <size=24>" + status + "</size>\n<size=24>" + reward + "</size>", 110);
                     var id = q.id;
                     if (q.CanClaim)
                         UiKit.RowButton(row, Texts.T("ui.claim"), UiKit.Good, () => _s.Run(async () =>
                         {
                             var r = await _s.Api.ClaimQuestAsync(id);
-                            Toast("ได้รับ 🪙" + r.rewards.gold + (r.rewards.gems > 0 ? " 💎" + r.rewards.gems : "") + (r.level.HasValue ? "  เลเวล " + r.level : ""));
+                            Toast("ได้รับ " + Texts.T("ui.gold") + " " + r.rewards.gold + (r.rewards.gems > 0 ? " " + Texts.T("ui.gems") + " " + r.rewards.gems : "") + (r.level.HasValue ? "  เลเวล " + r.level : ""));
                             ShowQuests();
                         }));
                     else if (q.canStart && q.progress == null)
@@ -421,7 +423,7 @@ namespace HappyWorld.Unity.UI
                 var w = await _s.Api.GetWalletAsync();
                 var inv = await _s.Api.GetInventoryAsync();
                 UiKit.Clear(list);
-                UiKit.Row(list, "🪙 " + Texts.T("ui.gold") + " " + w.Gold + "     💎 " + Texts.T("ui.gems") + " " + w.Gems);
+                UiKit.Row(list, Texts.T("ui.gold") + " " + w.Gold + "     " + Texts.T("ui.gems") + " " + w.Gems);
                 foreach (var i in inv) UiKit.Row(list, Texts.T(i.itemId) + "  ×" + i.quantity, 70);
                 if (w.recentTransactions.Count > 0) UiKit.Row(list, "<b>รายการล่าสุด</b>", 60);
                 foreach (var t in w.recentTransactions.Take(10))
@@ -444,8 +446,8 @@ namespace HappyWorld.Unity.UI
                     var row = UiKit.Row(list, Texts.T(c.itemId) + owned);
                     var id = c.itemId;
                     if (c.ownedQuantity > 0 && !c.stackable) continue;
-                    if (c.priceGold.HasValue) UiKit.RowButton(row, "🪙 " + c.priceGold, UiKit.Good, () => Buy(id, "GOLD"), 170);
-                    if (c.priceGems.HasValue) UiKit.RowButton(row, "💎 " + c.priceGems, UiKit.Primary, () => Buy(id, "GEMS"), 170);
+                    if (c.priceGold.HasValue) UiKit.RowButton(row, Texts.T("ui.gold") + " " + c.priceGold, UiKit.Good, () => Buy(id, "GOLD"), 170);
+                    if (c.priceGems.HasValue) UiKit.RowButton(row, Texts.T("ui.gems") + " " + c.priceGems, UiKit.Primary, () => Buy(id, "GEMS"), 170);
                 }
             });
         }
@@ -458,6 +460,7 @@ namespace HappyWorld.Unity.UI
                 var r = await _s.Api.BuyItemAsync(itemId, 1, currency, key);
                 Toast("ซื้อ " + Texts.T(itemId) + " แล้ว  (เหลือ " + r.balanceAfter + ")");
                 ShowStore();
+                RefreshHud(); // HUD balance otherwise stays stale until the modal is closed
             });
         }
 
@@ -493,7 +496,7 @@ namespace HappyWorld.Unity.UI
                     ShowShop();
                 }), 300);
                 if (b.upgradeCost.HasValue)
-                    UiKit.RowButton(UiKit.Row(list, "อัปเกรดร้าน (🪙 " + b.upgradeCost + ")"), "อัปเกรด", UiKit.Primary, () => _s.Run(async () =>
+                    UiKit.RowButton(UiKit.Row(list, "อัปเกรดร้าน (" + Texts.T("ui.gold") + " " + b.upgradeCost + ")"), "อัปเกรด", UiKit.Primary, () => _s.Run(async () =>
                     {
                         await _s.Api.UpgradeBusinessAsync(b.id, b.level);
                         ShowShop();
