@@ -23,12 +23,56 @@ namespace HappyWorld.Unity.UI
             }
         }
 
-        public static readonly Color Panel = new Color(1f, 1f, 1f, 0.95f);
+        public static readonly Color Panel = new Color(1f, 0.99f, 0.96f, 0.97f);
         public static readonly Color Primary = new Color(0.27f, 0.6f, 0.95f);
+        public static readonly Color Accent = new Color(1f, 0.62f, 0.25f);
         public static readonly Color Good = new Color(0.3f, 0.75f, 0.4f);
         public static readonly Color Danger = new Color(0.9f, 0.35f, 0.35f);
         public static readonly Color Muted = new Color(0.6f, 0.6f, 0.65f);
         public static readonly Color Ink = new Color(0.15f, 0.15f, 0.2f);
+
+        private static Sprite _rounded;
+
+        /// <summary>
+        /// A white rounded-corner sprite drawn in code (no image asset), 9-sliced so any box can use it.
+        /// Buttons, rows, panels and toasts use it so the whole UI reads soft and friendly instead of boxy.
+        /// </summary>
+        public static Sprite Rounded
+        {
+            get
+            {
+                if (_rounded != null) return _rounded;
+                const int size = 64, r = 22;
+                var tex = new Texture2D(size, size, TextureFormat.RGBA32, false) { filterMode = FilterMode.Bilinear, wrapMode = TextureWrapMode.Clamp, name = "UiRounded" };
+                var px = new Color32[size * size];
+                for (int y = 0; y < size; y++)
+                    for (int x = 0; x < size; x++)
+                    {
+                        float cx = Mathf.Clamp(x + 0.5f, r, size - r), cy = Mathf.Clamp(y + 0.5f, r, size - r);
+                        float d = Mathf.Sqrt((x + 0.5f - cx) * (x + 0.5f - cx) + (y + 0.5f - cy) * (y + 0.5f - cy));
+                        px[y * size + x] = new Color32(255, 255, 255, (byte)(Mathf.Clamp01(r - d + 0.5f) * 255));
+                    }
+                tex.SetPixels32(px);
+                tex.Apply(false, true);
+                _rounded = Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f), 100f, 0, SpriteMeshType.FullRect, new Vector4(r, r, r, r));
+                return _rounded;
+            }
+        }
+
+        /// <summary>Gives a box the rounded look (and an optional soft drop shadow).</summary>
+        public static Image Round(this Image img, bool shadow = false, float radiusScale = 1f)
+        {
+            img.sprite = Rounded;
+            img.type = Image.Type.Sliced;
+            img.pixelsPerUnitMultiplier = 1f / Mathf.Max(0.1f, radiusScale);
+            if (shadow)
+            {
+                var s = img.gameObject.AddComponent<Shadow>();
+                s.effectColor = new Color(0f, 0f, 0f, 0.22f);
+                s.effectDistance = new Vector2(0f, -5f);
+            }
+            return img;
+        }
 
         public static Canvas CreateCanvas()
         {
@@ -86,12 +130,17 @@ namespace HappyWorld.Unity.UI
 
         public static Button Button(Transform parent, string text, Color color, Action onClick, int size = 34)
         {
-            var img = Box("Button", parent, color);
+            var img = Box("Button", parent, color).Round(true);
             var b = img.gameObject.AddComponent<Button>();
             b.targetGraphic = img;
+            img.gameObject.AddComponent<PressBounce>();
             var label = Label(img.transform, text, size, TextAnchor.MiddleCenter, Color.white);
             label.rectTransform.Place(Vector2.zero, Vector2.one, new Vector2(8, 4), new Vector2(-8, -4));
-            b.onClick.AddListener(() => onClick());
+            b.onClick.AddListener(() =>
+            {
+                Audio.GameAudio.Sfx("sfx_click", 0.7f);
+                onClick();
+            });
             return b;
         }
 
@@ -143,7 +192,7 @@ namespace HappyWorld.Unity.UI
         /// <summary>A list row: text on the left, buttons on the right.</summary>
         public static RectTransform Row(Transform list, string text, float height = 96)
         {
-            var row = Box("Row", list, new Color(0.95f, 0.96f, 1f)).rectTransform;
+            var row = Box("Row", list, new Color(0.95f, 0.96f, 1f)).Round(false, 0.6f).rectTransform;
             var le = row.gameObject.AddComponent<LayoutElement>();
             le.minHeight = height;
             le.preferredHeight = height;
@@ -172,6 +221,22 @@ namespace HappyWorld.Unity.UI
         public static void Clear(Transform t)
         {
             for (int i = t.childCount - 1; i >= 0; i--) UnityEngine.Object.Destroy(t.GetChild(i).gameObject);
+        }
+    }
+
+    /// <summary>Buttons squish a little under the finger and spring back: they feel pressable.</summary>
+    public sealed class PressBounce : MonoBehaviour, IPointerDownHandler, IPointerUpHandler, IPointerExitHandler
+    {
+        private float _target = 1f;
+
+        public void OnPointerDown(PointerEventData e) => _target = 0.93f;
+        public void OnPointerUp(PointerEventData e) => _target = 1f;
+        public void OnPointerExit(PointerEventData e) => _target = 1f;
+
+        private void Update()
+        {
+            var s = Mathf.Lerp(transform.localScale.x, _target, 1f - Mathf.Exp(-Time.unscaledDeltaTime * 25f));
+            transform.localScale = new Vector3(s, s, 1f);
         }
     }
 

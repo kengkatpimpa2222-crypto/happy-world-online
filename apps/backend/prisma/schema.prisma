@@ -163,17 +163,18 @@ model User {
   sessions              GameSession[]
   purchases             Purchase[]
   subscriptions         Subscription[]
-  friends               Friend[]               @relation("UserFriends")
-  friendOf              Friend[]               @relation("FriendOfUser")
-  sentRequests          FriendRequest[]        @relation("SentRequests")
-  receivedRequests      FriendRequest[]        @relation("ReceivedRequests")
-  blocking              BlockedPlayer[]        @relation("Blocker")
-  blockedBy             BlockedPlayer[]        @relation("Blocked")
-  reportsMade           ModerationReport[]     @relation("Reporter")
-  reportsReceived       ModerationReport[]     @relation("Reported")
+  friends               Friend[]                  @relation("UserFriends")
+  friendOf              Friend[]                  @relation("FriendOfUser")
+  sentRequests          FriendRequest[]           @relation("SentRequests")
+  receivedRequests      FriendRequest[]           @relation("ReceivedRequests")
+  blocking              BlockedPlayer[]           @relation("Blocker")
+  blockedBy             BlockedPlayer[]           @relation("Blocked")
+  reportsMade           ModerationReport[]        @relation("Reporter")
+  reportsReceived       ModerationReport[]        @relation("Reported")
   festivalContributions FestivalContribution[]
   cityBuilds            CityBuilderContribution[]
   festivalClaims        FestivalRewardClaim[]
+  minigameSessions      MinigameSession[]
 
   @@index([deviceIdHash])
   @@map("users")
@@ -370,6 +371,7 @@ model Business {
   user        User                @relation(fields: [userId], references: [id], onDelete: Cascade)
   inventory   BusinessInventory[]
   settlements ShopSettlement[]
+  minigames   MinigameSession[]
 
   @@index([userId])
   @@index([shopStatus, settledTick])
@@ -703,4 +705,32 @@ model CityBuilderContribution {
   @@index([projectCode, ageBand, points(sort: Desc)])
   @@index([userId])
   @@map("city_builder_contributions")
+}
+
+/// One mini-game round (make goods by hand). Stars and units are decided by the server on finish.
+model MinigameSession {
+  id           String    @id @default(uuid()) @db.Uuid
+  userId       String    @map("user_id") @db.Uuid
+  businessId   String    @map("business_id") @db.Uuid
+  /// CATCH | GRILL | POUR
+  game         String    @db.VarChar(16)
+  productCode  String    @map("product_code") @db.VarChar(32)
+  seed         Int
+  /// Bangkok calendar day the round started (daily limit)
+  bkkDay       String    @map("bkk_day") @db.VarChar(10)
+  startedAt    DateTime  @default(now()) @map("started_at")
+  finishedAt   DateTime? @map("finished_at")
+  score        Int?
+  stars        Int?
+  /// this round counted toward the daily limit and made goods
+  rewarded     Boolean   @default(false)
+  unitsAwarded Int       @default(0) @map("units_awarded")
+  xpAwarded    Int       @default(0) @map("xp_awarded")
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@index([userId, bkkDay])
+  @@index([userId, game, score])
+  @@map("minigame_sessions")
 }

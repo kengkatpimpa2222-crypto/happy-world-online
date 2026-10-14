@@ -7,6 +7,7 @@ using Avatar = HappyWorld.Core.Api.Avatar; // UnityEngine also has an Avatar typ
 using HappyWorld.Core.Localization;
 using HappyWorld.Core.Realtime;
 using HappyWorld.Core.World;
+using HappyWorld.Unity.Audio;
 using HappyWorld.Unity.Net;
 using HappyWorld.Unity.UI;
 using HappyWorld.Unity.World;
@@ -136,6 +137,7 @@ namespace HappyWorld.Unity
             }
             RenderSettings.ambientLight = new Color(0.6f, 0.6f, 0.65f);
             _ambience = CityAmbience.Create(transform);
+            GameAudio.Create(transform).SetTown(12f, "SUNNY"); // the day theme already plays on the login screen
 
             _zoneRoot = new GameObject("Zone").transform;
             _playersRoot = new GameObject("Players").transform;
@@ -332,11 +334,13 @@ namespace HappyWorld.Unity
             Rt.FestivalMilestone += m =>
             {
                 if (_decor != null) _decor.Celebrate(m.tier);
+                GameAudio.Sfx("sfx_fanfare");
                 _ui.Toast(FestivalPresenter.MilestoneText(m.tier), "ดูรางวัล", () => _ui.ShowFestival());
                 RefreshFestival();
             };
             Rt.CityGrowth += e =>
             {
+                GameAudio.Sfx("sfx_fanfare");
                 _ui.Toast(CityLifePresenter.BuiltText(e), Texts.T("ui.city"), () => _ui.ShowCity());
                 RefreshGrowth();
             };
@@ -637,6 +641,7 @@ namespace HappyWorld.Unity
             {
                 var hour = CityHour;
                 _ambience.Apply(hour, CityNow.weather);
+                GameAudio.I.SetTown(hour, CityNow.weather);
                 if (Time.time >= _cityLineAt)
                 {
                     _cityLineAt = Time.time + 1f;

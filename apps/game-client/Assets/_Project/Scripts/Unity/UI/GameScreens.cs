@@ -4,10 +4,12 @@ using System.Linq;
 using HappyWorld.Core.Api;
 using Avatar = HappyWorld.Core.Api.Avatar; // UnityEngine also has an Avatar type
 using HappyWorld.Core.Localization;
+using HappyWorld.Core.Minigames;
 using HappyWorld.Core.Realtime;
 using HappyWorld.Core.World;
 using UnityEngine;
 using UnityEngine.UI;
+using HappyWorld.Unity.Minigames;
 
 namespace HappyWorld.Unity.UI
 {
@@ -53,7 +55,7 @@ namespace HappyWorld.Unity.UI
             _hud.gameObject.SetActive(false);
             UiKit.Clear(_modalLayer);
             var bg = UiKit.Box("Bg", _screen, new Color(0.62f, 0.85f, 1f)).rectTransform.Place(Vector2.zero, Vector2.one);
-            var card = UiKit.Box("Card", bg, UiKit.Panel).rectTransform.Place(new Vector2(0.25f, 0.06f), new Vector2(0.75f, 0.94f));
+            var card = UiKit.Box("Card", bg, UiKit.Panel).Round(true, 1.4f).rectTransform.Place(new Vector2(0.25f, 0.06f), new Vector2(0.75f, 0.94f));
             return card;
         }
 
@@ -191,7 +193,7 @@ namespace HappyWorld.Unity.UI
         {
             Joystick = VirtualJoystick.Create(_hud);
 
-            var top = UiKit.Box("TopBar", _hud, new Color(1, 1, 1, 0.85f)).rectTransform.Place(new Vector2(0, 1), new Vector2(0.36f, 1), new Vector2(16, -200), new Vector2(0, -16));
+            var top = UiKit.Box("TopBar", _hud, new Color(1, 1, 1, 0.85f)).Round(true).rectTransform.Place(new Vector2(0, 1), new Vector2(0.36f, 1), new Vector2(16, -200), new Vector2(0, -16));
             _nameText = UiKit.Label(top, "", 32);
             _nameText.rectTransform.Place(new Vector2(0, 0.66f), Vector2.one, new Vector2(20, 0), new Vector2(-10, 0));
             _moneyText = UiKit.Label(top, "", 32);
@@ -442,7 +444,7 @@ namespace HappyWorld.Unity.UI
         {
             UiKit.Clear(_modalLayer);
             var dim = UiKit.Box("Dim", _modalLayer, new Color(0, 0, 0, 0.45f)).rectTransform.Place(Vector2.zero, Vector2.one);
-            var panel = UiKit.Box("Panel", dim, UiKit.Panel).rectTransform.Place(new Vector2(0.18f, 0.06f), new Vector2(0.82f, 0.94f));
+            var panel = UiKit.Box("Panel", dim, UiKit.Panel).Round(true, 1.4f).rectTransform.Place(new Vector2(0.18f, 0.06f), new Vector2(0.82f, 0.94f));
             UiKit.Label(panel, title, 44, TextAnchor.MiddleLeft, UiKit.Primary).rectTransform
                 .Place(new Vector2(0, 0.88f), Vector2.one, new Vector2(30, 0), new Vector2(-200, 0));
             UiKit.Button(panel, "✕ " + Texts.T("ui.close"), UiKit.Muted, CloseModal, 28).GetComponent<RectTransform>()
@@ -473,9 +475,30 @@ namespace HappyWorld.Unity.UI
                 UiKit.Row(list, Texts.T("ui.friend_code") + ":  <b>" + p.friendCode + "</b>\n<size=24>บอกรหัสนี้ให้เพื่อนเพื่อเพิ่มเพื่อน</size>", 120);
                 UiKit.RowButton(UiKit.Row(list, "แต่งตัวละครใหม่"), "แก้ไข", UiKit.Primary, () =>
                     _s.Run(async () => _s_ShowCreator(p, await _s.Api.GetInventoryAsync())));
+                SoundRow(list, "เพลงประกอบ", () => Audio.GameAudio.MusicVolume, v => Audio.GameAudio.MusicVolume = v, 0.55f);
+                SoundRow(list, "เสียงเอฟเฟกต์", () => Audio.GameAudio.SfxVolume, v => Audio.GameAudio.SfxVolume = v, 0.9f);
                 UiKit.RowButton(UiKit.Row(list, "ออกจากระบบ\n<size=22>บัญชีผู้เล่นทั่วไปจะเข้าคืนไม่ได้ถ้ายังไม่ผูกอีเมล</size>", 110), "ออก", UiKit.Danger,
                     () => _s.Run(_s.LogoutAsync));
             });
+        }
+
+        /// <summary>On/off for music or sound effects (saved on this device).</summary>
+        private static void SoundRow(RectTransform list, string label, Func<float> get, Action<float> set, float onValue)
+        {
+            var row = UiKit.Row(list, label);
+            Button b = null;
+            Action paint = () =>
+            {
+                var on = get() > 0f;
+                b.GetComponentInChildren<Text>().text = on ? "เปิดอยู่" : "ปิดอยู่";
+                b.GetComponent<Image>().color = on ? UiKit.Good : UiKit.Muted;
+            };
+            b = UiKit.RowButton(row, "", UiKit.Good, () =>
+            {
+                set(get() > 0f ? 0f : onValue);
+                paint();
+            }, 170);
+            paint();
         }
 
         private void _s_ShowCreator(PlayerProfile p, List<InventoryItem> inv) => ShowCharacterCreator(p, inv, false);
@@ -752,6 +775,12 @@ namespace HappyWorld.Unity.UI
                 add.interactable = room > 0;
                 var remove = UiKit.RowButton(row, "เก็บลง", UiKit.Muted, () => SetShelf(list, b.id, code, 0), 120);
                 remove.interactable = shelf > 0;
+
+                // hands-on way to fill the storage: a short minigame whose stars decide how many units it makes
+                var game = MinigameRules.ForProduct(code);
+                if (game != null)
+                    UiKit.RowButton(UiKit.Row(list, "<size=24>" + Texts.T("ui.make") + ": " + MinigameRules.Title(game, code) + " · เล่นให้ได้ดาว ได้" + MarketNpcPlanner.ProductName(code) + "เข้าคลังฟรี</size>", 70),
+                        Texts.T("ui.make"), UiKit.Accent, () => PlayMinigame(b, code), 150);
             }
 
             if (b.upgradeCost.HasValue)
@@ -817,6 +846,12 @@ namespace HappyWorld.Unity.UI
         }
 
         /// <summary>"While you were away" report. Shown after sign-in when there is news, or from the shop.</summary>
+        private void PlayMinigame(Business b, string code)
+        {
+            UiKit.Clear(_modalLayer);
+            MinigameScreen.Open(_s, _modalLayer, b, code, _ => { RefreshHud(); ShowShop(); });
+        }
+
         public void ShowShopReport(ShopReport r, bool welcomeBack)
         {
             var list = OpenModal(welcomeBack ? "ระหว่างที่คุณไม่อยู่..." : "รายงานร้าน");
@@ -904,7 +939,8 @@ namespace HappyWorld.Unity.UI
 
         public void Toast(string text, string actionLabel = null, Action action = null)
         {
-            var box = UiKit.Box("Toast", _toastLayer, new Color(0.1f, 0.1f, 0.15f, 0.88f)).rectTransform;
+            Audio.GameAudio.Sfx("sfx_pop", 0.6f);
+            var box = UiKit.Box("Toast", _toastLayer, new Color(0.1f, 0.1f, 0.15f, 0.88f)).Round(true).rectTransform;
             int n = _toastLayer.childCount - 1;
             box.Place(new Vector2(0.3f, 0), new Vector2(0.7f, 0), new Vector2(0, 30 + n * 120), new Vector2(0, 140 + n * 120));
             var label = UiKit.Label(box, text, 30, TextAnchor.MiddleCenter, Color.white);

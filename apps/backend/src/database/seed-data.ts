@@ -66,5 +66,6 @@ export const QUESTS: {
   { id: 'home_first_furniture', category: 'HOME', objectiveType: 'PLACE_FURNITURE', objectiveTarget: 1, rewardGold: 80, rewardXp: 20 },
   // co-op & life skill
   { id: 'coop_make_friend', category: 'COOP', objectiveType: 'ADD_FRIEND', objectiveTarget: 1, rewardGold: 100, rewardXp: 30 },
+  { id: 'life_homemade_goods', category: 'LIFE_SKILL', objectiveType: 'PLAY_MINIGAME', objectiveTarget: 3, rewardGold: 100, rewardXp: 40 },
   { id: 'life_budget_buyer', category: 'LIFE_SKILL', objectiveType: 'BUY_ITEM', objectiveTarget: 3, rewardGold: 120, rewardXp: 40, rewardItemId: 'furn_plant_pot' },
 ];

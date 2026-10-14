@@ -3,6 +3,7 @@ using System.Linq;
 using HappyWorld.Core.Api;
 using HappyWorld.Core.Realtime;
 using HappyWorld.Core.World;
+using HappyWorld.Unity.Art;
 using UnityEngine;
 
 namespace HappyWorld.Unity.World
@@ -170,7 +171,16 @@ namespace HappyWorld.Unity.World
             var p = Data.products.FirstOrDefault(x => x.productCode == productCode);
             if (p != null) p.shelfQuantity = Mathf.Max(0, p.shelfQuantity - quantity);
             RefreshGoods();
-            if (coins > 0) FloatingText.Spawn(transform, new Vector3(0, 2.2f, Data.face * 1.2f), "+" + coins + " ทอง", new Color(1f, 0.85f, 0.2f));
+            if (coins > 0)
+            {
+                FloatingText.Spawn(transform, new Vector3(0, 2.2f, Data.face * 1.2f), "+" + coins + " ทอง", new Color(1f, 0.85f, 0.2f));
+                CoinPop.Spawn(transform, new Vector3(0, 1.4f, Data.face * 0.9f));
+                // the clink is loud for my own stall and fades with distance for the others
+                var cam = Camera.main;
+                var d = cam != null ? Vector3.Distance(cam.transform.position, transform.position) : 0f;
+                var vol = Data.isMine ? 1f : Mathf.Clamp01(1f - (d - 10f) / 25f) * 0.6f;
+                if (vol > 0.05f) Audio.GameAudio.Sfx("sfx_coin", vol, Random.Range(0.95f, 1.1f));
+            }
         }
 
         public void ShowLostCustomer()
@@ -217,6 +227,20 @@ namespace HappyWorld.Unity.World
                 default: shirt = Color.white; hair = Color.black; break;
             }
             var t = root.transform;
+            var rig = CharacterRig.Create(t);
+            if (rig != null)
+            {
+                foreach (var c in rig.GetComponentsInChildren<Collider>()) Destroy(c);
+                rig.transform.localScale *= 0.85f; // customers a touch smaller than players
+                rig.Dress(new Color(0.55f, 0.55f, 0.62f), shirt, hair);
+                var hatParent = rig.Torso != null ? rig.Torso : t;
+                if (plan.Visit.customerType == "FESTIVAL_GOER")
+                    Strip(Place(CityBuilder.Prim(PrimitiveType.Cylinder, hatParent, Vector3.zero, Vector3.one, new Color(1f, 0.85f, 0.2f), "PartyHat"), rig.HatLocalPos + Vector3.up * 0.02f, new Vector3(0.12f, 0.1f, 0.12f)));
+                if (plan.Visit.customerType == "TOURIST")
+                    Strip(Place(CityBuilder.Prim(PrimitiveType.Cylinder, hatParent, Vector3.zero, Vector3.one, new Color(0.95f, 0.9f, 0.6f), "Hat"), rig.HatLocalPos + Vector3.down * 0.08f, new Vector3(0.75f, 0.02f, 0.75f)));
+            }
+            else
+            {
             Strip(CityBuilder.Prim(PrimitiveType.Capsule, t, new Vector3(0, 0.85f, 0), new Vector3(0.65f, 0.42f, 0.65f), new Color(0.45f, 0.45f, 0.5f), "Legs"));
             Strip(CityBuilder.Prim(PrimitiveType.Cube, t, new Vector3(0, 1.0f, 0), new Vector3(0.62f, 0.5f, 0.42f), shirt, "Shirt"));
             Strip(CityBuilder.Prim(PrimitiveType.Sphere, t, new Vector3(0, 1.5f, 0), new Vector3(0.5f, 0.5f, 0.5f), new Color(1f, 0.85f, 0.7f), "Head"));
@@ -225,6 +249,7 @@ namespace HappyWorld.Unity.World
                 Strip(CityBuilder.Prim(PrimitiveType.Cylinder, t, new Vector3(0, 1.92f, 0), new Vector3(0.22f, 0.16f, 0.22f), new Color(1f, 0.85f, 0.2f), "PartyHat"));
             if (plan.Visit.customerType == "TOURIST")
                 Strip(CityBuilder.Prim(PrimitiveType.Cylinder, t, new Vector3(0, 1.82f, 0), new Vector3(0.7f, 0.03f, 0.7f), new Color(0.95f, 0.9f, 0.6f), "Hat"));
+            }
             CityBuilder.Label(t, new Vector3(0, 2.15f, 0), MarketNpcPlanner.CustomerName(plan.Visit.customerType), 0.09f, new Color(0.9f, 0.95f, 1f));
             v._bubble = CityBuilder.Label(t, new Vector3(0, 2.6f, 0), "", 0.12f, new Color(1f, 1f, 0.6f));
             float x, y;
@@ -235,6 +260,13 @@ namespace HappyWorld.Unity.World
         }
 
         private static void Strip(GameObject go) => Destroy(go.GetComponent<Collider>()); // NPCs are not tappable
+
+        private static GameObject Place(GameObject go, Vector3 localPos, Vector3 localScale)
+        {
+            go.transform.localPosition = localPos;
+            go.transform.localScale = localScale;
+            return go;
+        }
 
         /// <summary>Moves along the planned path; returns the phase.</summary>
         public NpcPhase Step(double now)
@@ -256,6 +288,32 @@ namespace HappyWorld.Unity.World
             if (phase == NpcPhase.WalkingOut && _bubbleShown && now > Plan.StartAt + Plan.WalkInSeconds + Plan.WaitSeconds + 1.5)
                 _bubble.text = "";
             return phase;
+        }
+    }
+
+    /// <summary>A spinning gold coin (Kenney model) that hops up from a stall when something sells.</summary>
+    public sealed class CoinPop : MonoBehaviour
+    {
+        private float _born;
+        private Vector3 _start;
+
+        public static void Spawn(Transform parent, Vector3 localPos)
+        {
+            var coin = ModelLibrary.Spawn("city/coin", parent, localPos, 0.6f);
+            if (coin == null) return;
+            var c = coin.AddComponent<CoinPop>();
+            c._born = Time.time;
+            c._start = coin.transform.localPosition;
+        }
+
+        private void Update()
+        {
+            var age = Time.time - _born;
+            transform.localPosition = _start + Vector3.up * (2.4f * age - 1.6f * age * age); // a little hop
+            transform.Rotate(0, 540f * Time.deltaTime, 0, Space.Self);
+            var s = transform.localScale;
+            if (age > 0.9f) transform.localScale = s * Mathf.Max(0f, 1f - Time.deltaTime * 6f);
+            if (age > 1.3f) Destroy(gameObject);
         }
     }
 

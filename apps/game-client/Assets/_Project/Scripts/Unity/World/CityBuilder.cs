@@ -1,13 +1,15 @@
 using System.Collections.Generic;
 using HappyWorld.Core.Api;
 using HappyWorld.Core.Localization;
+using HappyWorld.Unity.Art;
 using UnityEngine;
 
 namespace HappyWorld.Unity.World
 {
     /// <summary>
-    /// Builds a zone from GET /city data with primitives, so the game runs with no art assets.
-    /// Server (x, y) maps to Unity (x, 0, y). Swap the primitives for real prefabs later; layout stays server-driven.
+    /// Builds a zone from GET /city data. Houses, trees, bushes, flags and clouds are Kenney low-poly models
+    /// (<see cref="ModelLibrary"/>); if a model is missing the old primitive stands in, so the city always builds.
+    /// Server (x, y) maps to Unity (x, 0, y); the layout stays server-driven.
     /// </summary>
     public static class CityBuilder
     {
@@ -76,9 +78,10 @@ namespace HappyWorld.Unity.World
             // ground (Unity plane is 10x10)
             var ground = Prim(PrimitiveType.Plane, root, new Vector3(w / 2, 0, h / 2), new Vector3(w / 10f, 1, h / 10f), g, "Ground");
             ground.layer = 0;
+            ground.GetComponent<Renderer>().sharedMaterial = GroundMat(zone.id, g, w, h);
 
             // low fences on the edges
-            var fence = new Color(0.55f, 0.40f, 0.28f);
+            var fence = new Color(0.93f, 0.86f, 0.72f); // light picket fence
             Prim(PrimitiveType.Cube, root, new Vector3(w / 2, 0.4f, -0.25f), new Vector3(w, 0.8f, 0.5f), fence);
             Prim(PrimitiveType.Cube, root, new Vector3(w / 2, 0.4f, h + 0.25f), new Vector3(w, 0.8f, 0.5f), fence);
             Prim(PrimitiveType.Cube, root, new Vector3(-0.25f, 0.4f, h / 2), new Vector3(0.5f, 0.8f, h), fence);
@@ -91,6 +94,8 @@ namespace HappyWorld.Unity.World
                 var ring = Prim(PrimitiveType.Cylinder, root, pos + Vector3.up * 0.05f, new Vector3(2.4f, 0.05f, 2.4f), new Color(1f, 0.85f, 0.2f), "Portal_" + p.to);
                 Object.Destroy(ring.GetComponent<Collider>());
                 Label(root, pos + Vector3.up * 2.2f, Texts.T("zone." + p.to.ToLowerInvariant()), 0.18f, Color.white);
+                foreach (var side in new[] { -1.6f, 1.6f })
+                    ModelLibrary.Spawn("city/flag", root, pos + new Vector3(side, 0, side * 0.3f), 2.4f, side < 0 ? 200f : 160f);
                 portals.Add(new PortalInfo { To = p.to, Position = pos });
             }
 
@@ -108,10 +113,13 @@ namespace HappyWorld.Unity.World
                 // Market: stalls (x 7..38) and the y=20 walkway NPC customers use come from the server, so keep
                 // random houses/trees out of that area (on device a house stood in the walkway, Phase 5 QA).
                 if (zone.id == "MARKET" && pos.x > 6) continue;
-                if (rnd.NextDouble() < 0.6) Tree(root, pos);
+                var roll = rnd.NextDouble();
+                if (roll < 0.45) Tree(root, pos, rnd);
+                else if (roll < 0.6) Bushes(root, pos, rnd);
                 else House(root, pos, rnd);
                 placed++;
             }
+            Clouds(root, w, h, rnd);
             return portals;
         }
 
@@ -124,21 +132,110 @@ namespace HappyWorld.Unity.World
             return g;
         }
 
-        private static void Tree(Transform root, Vector3 pos)
+        private static void Tree(Transform root, Vector3 pos, System.Random rnd)
         {
             var d = Deco(root, pos);
+            var yaw = (float)rnd.NextDouble() * 360f;
+            // a pine, or a little grove on its own lawn tile
+            var tree = rnd.NextDouble() < 0.6
+                ? ModelLibrary.Spawn("arena/tree", d, Vector3.zero, 3.2f + (float)rnd.NextDouble() * 1.4f, yaw)
+                : ModelLibrary.SpawnScaled(rnd.NextDouble() < 0.5 ? "city/grass-trees" : "city/grass-trees-tall", d, Vector3.zero, 3.2f, yaw);
+            if (tree != null)
+            {
+                var trunk = d.gameObject.AddComponent<CapsuleCollider>(); // solid trunk, like the primitive trees
+                trunk.radius = tree.name == "tree" ? 0.4f : 1.2f;
+                trunk.height = 3f;
+                trunk.center = Vector3.up * 1.5f;
+                return;
+            }
             Prim(PrimitiveType.Cylinder, d, Vector3.up * 0.75f, new Vector3(0.3f, 0.75f, 0.3f), new Color(0.45f, 0.30f, 0.2f));
             Prim(PrimitiveType.Sphere, d, Vector3.up * 2f, new Vector3(1.6f, 1.6f, 1.6f), new Color(0.25f, 0.6f, 0.3f));
         }
 
+        private static readonly string[] Houses = { "city/building-small-a", "city/building-small-b", "city/building-small-d", "city/building-small-a", "city/building-garage", "city/building-small-c" };
+
         private static void House(Transform root, Vector3 pos, System.Random rnd)
         {
             var d = Deco(root, pos);
+            // Kenney houses are 1x1 tiles: scale = footprint. Turned in 90 degree steps so streets look tidy.
+            var key = Houses[rnd.Next(Houses.Length)];
+            if (ModelLibrary.SpawnScaled(key, d, Vector3.zero, 3.4f, rnd.Next(4) * 90f) != null)
+            {
+                var box = d.gameObject.AddComponent<BoxCollider>(); // houses are solid, like the primitive ones
+                Vector3 min, max;
+                ModelLibrary.Bounds(key, out min, out max);
+                box.center = new Vector3(0, (max.y - min.y) * 3.4f / 2f, 0);
+                box.size = new Vector3(3.2f, (max.y - min.y) * 3.4f, 3.2f);
+                return;
+            }
             var colors = new[] { new Color(1f, 0.8f, 0.7f), new Color(0.7f, 0.85f, 1f), new Color(1f, 0.95f, 0.7f), new Color(0.85f, 1f, 0.8f) };
             var body = colors[rnd.Next(colors.Length)];
             Prim(PrimitiveType.Cube, d, Vector3.up * 1.25f, new Vector3(3f, 2.5f, 3f), body);
             var roof = Prim(PrimitiveType.Cube, d, Vector3.up * 2.9f, new Vector3(2.3f, 2.3f, 3.2f), new Color(0.8f, 0.35f, 0.3f));
             roof.transform.localRotation = Quaternion.Euler(0, 0, 45);
+        }
+
+        private static void Bushes(Transform root, Vector3 pos, System.Random rnd)
+        {
+            var d = Deco(root, pos);
+            int n = 2 + rnd.Next(3);
+            for (int i = 0; i < n; i++)
+            {
+                var off = new Vector3((float)rnd.NextDouble() * 2f - 1f, 0, (float)rnd.NextDouble() * 2f - 1f);
+                if (ModelLibrary.Spawn(i % 2 == 0 ? "city/bush" : "city/bush-small", d, off, 0.7f + (float)rnd.NextDouble() * 0.5f, (float)rnd.NextDouble() * 360f) == null)
+                    Prim(PrimitiveType.Sphere, d, off + Vector3.up * 0.35f, Vector3.one * 0.8f, new Color(0.3f, 0.65f, 0.35f));
+            }
+            foreach (var c in d.GetComponentsInChildren<Collider>()) Object.Destroy(c); // walk through bushes
+        }
+
+        /// <summary>A few slow clouds high above the zone (cheap: a handful of models, one material).</summary>
+        private static void Clouds(Transform root, float w, float h, System.Random rnd)
+        {
+            var sky = new GameObject("Clouds").transform;
+            sky.SetParent(root, false);
+            for (int i = 0; i < 5; i++)
+            {
+                var c = ModelLibrary.Spawn("city/cloud", sky, new Vector3((float)rnd.NextDouble() * w, 14f + (float)rnd.NextDouble() * 5f, (float)rnd.NextDouble() * h + 6f), 1.6f + (float)rnd.NextDouble(), (float)rnd.NextDouble() * 360f);
+                if (c == null) return;
+                c.transform.localScale = Vector3.Scale(c.transform.localScale, new Vector3(4f, 1f, 2.5f));
+                c.AddComponent<Drift>().Width = w;
+            }
+        }
+
+        private static readonly Dictionary<string, Material> GroundMats = new Dictionary<string, Material>();
+
+        /// <summary>
+        /// Ground with soft grass/paving speckles drawn in code (no texture asset): reads as a lawn or a
+        /// market square instead of a flat colour, and tiles cheaply over the whole zone.
+        /// </summary>
+        private static Material GroundMat(string zoneId, Color baseColor, float w, float h)
+        {
+            Material m;
+            if (GroundMats.TryGetValue(zoneId, out m)) return m;
+            const int size = 64;
+            var tex = new Texture2D(size, size, TextureFormat.RGB24, true) { wrapMode = TextureWrapMode.Repeat, filterMode = FilterMode.Bilinear, name = "Ground_" + zoneId };
+            var rnd = new System.Random(zoneId.GetHashCode());
+            var px = new Color[size * size];
+            bool paved = zoneId == "MARKET" || zoneId == "MINIGAME_GATE";
+            for (int y = 0; y < size; y++)
+                for (int x = 0; x < size; x++)
+                {
+                    var c = baseColor * (0.94f + 0.08f * (float)rnd.NextDouble());
+                    if (paved && (x % 16 == 0 || y % 16 == 0)) c *= 0.88f; // paving joints
+                    px[y * size + x] = c;
+                }
+            for (int i = 0; i < 70; i++) // little tufts / pebbles
+            {
+                int x = rnd.Next(size), y = rnd.Next(size);
+                var tuft = paved ? baseColor * 0.85f : Color.Lerp(baseColor, new Color(0.25f, 0.55f, 0.25f), 0.45f);
+                px[y * size + x] = tuft;
+                px[y * size + (x + 1) % size] = tuft;
+            }
+            tex.SetPixels(px);
+            tex.Apply(true, true);
+            m = new Material(Mat(Color.white)) { mainTexture = tex, color = Color.white, mainTextureScale = new Vector2(w / 4f, h / 4f) };
+            GroundMats[zoneId] = m;
+            return m;
         }
 
         public static TextMesh Label(Transform parent, Vector3 pos, string text, float size, Color color)
@@ -157,6 +254,21 @@ namespace HappyWorld.Unity.World
             tm.color = color;
             go.AddComponent<Billboard>();
             return tm;
+        }
+    }
+
+    /// <summary>Moves a cloud slowly across the sky and wraps it around the zone.</summary>
+    public sealed class Drift : MonoBehaviour
+    {
+        public float Width = 60f;
+        public float Speed = 0.6f;
+
+        private void Update()
+        {
+            var p = transform.localPosition;
+            p.x += Speed * Time.deltaTime;
+            if (p.x > Width + 10f) p.x = -10f;
+            transform.localPosition = p;
         }
     }
 
