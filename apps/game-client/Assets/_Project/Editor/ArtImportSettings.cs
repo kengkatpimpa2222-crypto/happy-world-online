@@ -11,6 +11,9 @@ namespace HappyWorld.EditorTools
     /// </summary>
     public sealed class ArtImportSettings : AssetPostprocessor
     {
+        // bump to make Unity re-run these rules on already imported art
+        public override uint GetVersion() => 2;
+
         private const string ArtRoot = "/Resources/Art/";
 
         private void OnPreprocessTexture()
@@ -18,6 +21,9 @@ namespace HappyWorld.EditorTools
             if (!assetPath.Contains(ArtRoot)) return;
             var t = (TextureImporter)assetImporter;
             t.textureType = TextureImporterType.Default;
+            // The .meta files were committed with only a guid; Unity then imported these PNGs as Cubemaps, so
+            // Resources.Load<Texture2D> returned null and every model rendered white (Phase 8 QA on device).
+            t.textureShape = TextureImporterShape.Texture2D;
             t.mipmapEnabled = false;
             // model colormaps are flat colour cells (crisp); mini-game sprites are drawn art (smooth)
             t.filterMode = assetPath.Contains("/Art/Models/") ? FilterMode.Point : FilterMode.Bilinear;

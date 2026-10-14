@@ -514,6 +514,10 @@ namespace HappyWorld.Unity.Minigames
             glass.raycastTarget = false;
             glass.rectTransform.Place(Vector2.zero, Vector2.one);
             _stream = UiKit.Box("Stream", _field, new Color(0.93f, 0.52f, 0.2f)).rectTransform;
+            // The hold is read by the "Input" layer underneath; the tea, target band and stream sit on top of it and
+            // used to swallow the touch, so holding on the glass (where everyone presses) never poured (Phase 8 QA).
+            foreach (var g in holder.GetComponentsInChildren<Graphic>()) g.raycastTarget = false;
+            _stream.GetComponent<Graphic>().raycastTarget = false;
             var hint = UiKit.Label(_field, "แตะค้างตรงไหนก็ได้เพื่อเท", 30, TextAnchor.MiddleCenter, UiKit.Muted);
             hint.rectTransform.Place(new Vector2(0.25f, 0.01f), new Vector2(0.75f, 0.09f));
             if (GameAudio.I != null) { GameAudio.I.Loop("loop_pour"); GameAudio.I.SetLoopVolume(0f); }
