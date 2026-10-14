@@ -147,3 +147,21 @@ curl -s $API/city/growth -H "authorization: Bearer $TOKEN"
 
 `GET /city` และ `GET /city/players` เดิมทำงานเหมือนเดิม อากาศคำนวณจากนาฬิกา + hash (`packages/shared-contracts/src/city-time.ts`) ทุกเครื่องเห็นเหมือนกัน สำหรับทดสอบบนเครื่อง ตั้ง `CITY_WEATHER_OVERRIDE=RAIN` (หรือ SUNNY / HOT / CLOUDY) เพื่อบังคับอากาศ และ `FESTIVAL_CLOCK_OFFSET_HOURS` เลื่อนนาฬิกาเมืองไปพร้อมกับปฏิทินเทศกาล (ห้ามใช้ทั้งสองค่าใน production ระบบไม่ยอมเปิด)
 
+
+## มินิเกมทำของขาย (Phase 8)
+
+ทำสินค้าเข้าคลังร้านด้วยมือ: เล่นรอบสั้น ๆ ได้ดาว 0–3 ดวง ได้ของ 1/4/7/10 ชิ้น (ต้นทุน 0) และ XP 1/3/5/8 วันละ 15 รอบที่ได้ของ (นับตามวันเวลาไทย) เกินจากนั้นเล่นได้แต่ไม่ได้ของ
+
+| เกม | สินค้า | เวลา | คะแนนดาว 1/2/3 | คะแนนสูงสุดที่รับ |
+|---|---|---|---|---|
+| CATCH เก็บมะนาว/ดอกไม้ | LEMONADE, FLOWER | 45 วิ | 250 / 500 / 750 | 2800 |
+| GRILL ปิ้งลูกชิ้น/อบขนมปัง | MEATBALL, BREAD | 60 วิ | 500 / 1100 / 2000 | 6000 |
+| POUR ชงชาไทย | THAI_TEA | 40 วิ | 450 / 1100 / 1700 | 3000 |
+
+| Method | Path | หมายเหตุ |
+|---|---|---|
+| GET | `/minigames` | กติกา คะแนนดาว รอบที่ยังได้ของวันนี้ (`rewardedPlaysLeft`, `resetsAt`) และคะแนนสูงสุดของฉันต่อเกม |
+| POST | `/minigames/start` | `{businessId, productCode}` สินค้าต้องปลดล็อกแล้ว คืน `{sessionId, game, seed, durationSeconds, starScores, unitsByStars, rewardedPlaysLeft}` เกมใช้ `seed` สร้างด่านแบบเดียวกันทุกเครื่อง |
+| POST | `/minigames/:id/finish` | `{score}` ส่งก่อนหมดเวลาเกิน 3 วิ = `MINIGAME_TOO_EARLY`, ช้ากว่าหมดเวลาเกิน 10 นาที = `MINIGAME_EXPIRED`, คะแนนเกินเพดานเกม = `MINIGAME_SCORE_INVALID` เรียกซ้ำได้ผลเดิม (`replayed: true`) ไม่ได้ของซ้ำ คืน `{stars, rewarded, unitsAwarded, xpAwarded, stockFull, level, best, rewardedPlaysLeft, business}` |
+
+คลังเต็มจะได้ของเท่าที่ใส่ได้ (`stockFull: true`) จบรอบนับเควส `PLAY_MINIGAME` (เควสใหม่ "ทำของขายเอง 3 รอบ")

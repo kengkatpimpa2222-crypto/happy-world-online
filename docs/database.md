@@ -65,6 +65,13 @@ Schema: [`apps/backend/prisma/schema.prisma`](../apps/backend/prisma/schema.pris
 - CHECK: แต้มไม่ติดลบ
 - ไม่มีตารางอากาศหรือรายการโครงการ: อากาศคำนวณจากเวลา รายการโครงการอยู่ใน `packages/shared-contracts/src/city-growth.ts`
 
+## Migration ของ Phase 8 (`*_minigames`)
+
+- เพิ่มอย่างเดียว ไม่แตะตารางเดิม
+- `minigame_sessions`: หนึ่งแถวต่อหนึ่งรอบมินิเกม (`seed` ที่ server สุ่ม, `bkk_day` วันเวลาไทยที่เริ่ม ใช้นับโควตารายวัน, คะแนน ดาว ของที่ได้ XP ที่ได้) index (user_id, bkk_day) และ (user_id, game, score)
+- CHECK: game ต้องเป็น CATCH/GRILL/POUR, ดาว 0–3, คะแนนและของที่ได้ไม่ติดลบ
+- จบรอบล็อก `player_profiles` ของผู้เล่นก่อน แล้วค่อยล็อกแถวรอบ กันการกดจบหลายรอบพร้อมกันจนเกินโควตา 15 รอบ/วัน
+
 ## ข้อควรรู้
 
 - `wallet_transactions` ลบไม่ได้โดยออกแบบ การลบบัญชีผู้เล่น (สิทธิ์ตาม PDPA) ให้ทำแบบ anonymize/soft delete (`users.status = DELETED`, ล้างอีเมลและชื่อ) แทนการ hard delete

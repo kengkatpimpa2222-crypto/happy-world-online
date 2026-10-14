@@ -73,7 +73,8 @@ Tests/HappyWorld.Core.Tests   xunit: unit + integration กับ backend จร
 
 - **ฟอนต์ไทย**: ใช้ Loma (TLWG, GPL-2+ with font exception) ที่ `Resources/HWOFont.otf` เพื่อให้ไทยแสดงผลได้ทุกเครื่อง uGUI Text แบบ legacy วางสระบน/วรรณยุกต์ได้ไม่สวยทุกกรณี ก่อนปล่อยจริงแนะนำเปลี่ยนเป็นฟอนต์ OFL (Sarabun, Noto Sans Thai) และย้ายไป TextMeshPro + font asset ที่ทำ Thai shaping
 - **Refresh token** เก็บใน PlayerPrefs (ไม่เข้ารหัส) ใช้ได้เฉพาะช่วงพัฒนา ก่อนปล่อยต้องเปลี่ยนเป็น Android Keystore / iOS Keychain (`ITokenStore` แทนได้ทันที)
-- **ภาพ**: ตัวละครและเมืองเป็น primitive (กล่อง ทรงกระบอก ทรงกลม) เพื่อให้เล่นได้ก่อน เปลี่ยนเป็นโมเดลจริงได้ใน `AvatarView` และ `CityBuilder` โดย layout ยังมาจาก server
+- **ภาพและเสียง** (Phase 8): โมเดล low-poly ของ Kenney (CC0) เก็บเป็นไฟล์ `.glb` ในชื่อ `.bytes` ที่ `Resources/Art/Models/` และโหลดตอนรันด้วยตัวอ่าน GLB ของเราเอง (`Core/Art/GlbModel.cs`, `Unity/Art/ModelLibrary.cs`) จึงไม่ต้องลง package glTF ถ้าไฟล์โมเดลหายไป เกมจะกลับไปใช้ primitive แบบเดิมเอง เพลงและเสียงอยู่ที่ `Resources/Art/Audio/` (`Unity/Audio/GameAudio.cs`) การตั้งค่า import ของภาพและเสียงตั้งให้อัตโนมัติด้วย `Editor/ArtImportSettings.cs` ที่มาและลิขสิทธิ์ทุกไฟล์อยู่ใน [apps/game-client/ART_CREDITS.md](../apps/game-client/ART_CREDITS.md)
+- **มินิเกม**: ปุ่ม "ทำเอง" ในหน้าร้านเปิด `Unity/Minigames/MinigameScreen.cs` ลอจิกของเกมอยู่ใน `Core/Minigames/` (ไม่พึ่ง Unity, มีเทสต์) คะแนนและของที่ได้ server เป็นคนตัดสิน
 - **Input**: ใช้ Input Manager แบบเดิม (ไม่ต้องลง Input System package) ถ้า Unity ถามให้เปิด Input System ให้ตอบ No หรือตั้ง Active Input Handling = Both
 - Client ไม่คำนวณเงินหรือรางวัลเอง แสดงตามที่ server ตอบเท่านั้น ปุ่มซื้อสร้าง `Idempotency-Key` ใหม่ต่อการกดหนึ่งครั้ง
 
