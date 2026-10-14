@@ -567,11 +567,16 @@ namespace HappyWorld.Unity.UI
                 UiKit.RowButton(row, "ซื้อเข้า 10", UiKit.Primary, () => _s.Run(async () =>
                 {
                     await _s.Api.RestockAsync(b.id, code, 10, key);
+                    RefreshHud(); // restock is paid from the wallet
                     RefreshShop(list, b.id);
                 }), 160);
+                // Both shelf buttons are always drawn (greyed out when unusable) so they never shift under the
+                // player's finger: on device a second tap on "+5" landed on "เก็บลง" and emptied the stall (Phase 5 QA).
                 var room = Math.Min(st.shelfCapacity - shelf, storage);
-                if (room > 0) UiKit.RowButton(row, "ขึ้นแผง +" + Math.Min(5, room), UiKit.Good, () => SetShelf(list, b.id, code, shelf + Math.Min(5, room)), 160);
-                if (shelf > 0) UiKit.RowButton(row, "เก็บลง", UiKit.Muted, () => SetShelf(list, b.id, code, 0), 120);
+                var add = UiKit.RowButton(row, "ขึ้นแผง +" + Math.Max(0, Math.Min(5, room)), UiKit.Good, () => SetShelf(list, b.id, code, shelf + Math.Min(5, room)), 160);
+                add.interactable = room > 0;
+                var remove = UiKit.RowButton(row, "เก็บลง", UiKit.Muted, () => SetShelf(list, b.id, code, 0), 120);
+                remove.interactable = shelf > 0;
             }
 
             if (b.upgradeCost.HasValue)
@@ -664,6 +669,7 @@ namespace HappyWorld.Unity.UI
                 {
                     var c = await _s.Api.CollectShopAsync(r.businessId, key);
                     Toast("เก็บเงินเข้ากระเป๋า " + c.collected + " ทอง");
+                    RefreshHud(); // the welcome-back report collected into the wallet; HUD showed the old total (Phase 5 QA)
                     ShowShop();
                 }), 180);
             }

@@ -105,6 +105,9 @@ namespace HappyWorld.Unity.World
                 bool nearPortal = false;
                 foreach (var p in portals) if (Vector3.Distance(pos, p.Position) < 5) nearPortal = true;
                 if (nearPortal) continue;
+                // Market: stalls (x 7..38) and the y=20 walkway NPC customers use come from the server, so keep
+                // random houses/trees out of that area (on device a house stood in the walkway, Phase 5 QA).
+                if (zone.id == "MARKET" && pos.x > 6) continue;
                 if (rnd.NextDouble() < 0.6) Tree(root, pos);
                 else House(root, pos, rnd);
                 placed++;
