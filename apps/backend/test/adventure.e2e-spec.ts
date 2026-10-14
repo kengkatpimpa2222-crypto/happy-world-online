@@ -168,6 +168,9 @@ describe('Exploring and crafting (Phase 9)', () => {
     await giveSkillXp(p, 'CRAFTER', 360); // level 4
     const r = await craft(p, shop.id, 'HERBAL_BALM', 2).expect(200);
     expect(r.body.unitsMade).toBe(6);
+    // every material has a use: wild honey goes into the jam
+    await giveMaterials(p, { MANGO: 2, WILD_HONEY: 1 });
+    expect((await craft(p, shop.id, 'HONEY_MANGO_JAM', 1).expect(200)).body.unitsMade).toBe(3);
   });
 
   it("craft-only goods can't be bought with Gold or made in a mini-game, and someone else's shop is off limits", async () => {

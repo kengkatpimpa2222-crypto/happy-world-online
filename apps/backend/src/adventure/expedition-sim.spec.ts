@@ -1,4 +1,4 @@
-import { EXPEDITION_PLAN_CODES, EXPEDITION_SITE_CODES, EXPEDITION_SITES, ExpeditionPlan, ExpeditionSite, expeditionEventChance, skillLevelForXp } from '@hwo/shared-contracts';
+import { EXPEDITION_PLAN_CODES, MATERIAL_CODES, RECIPES, EXPEDITION_SITE_CODES, EXPEDITION_SITES, ExpeditionPlan, ExpeditionSite, expeditionEventChance, skillLevelForXp } from '@hwo/shared-contracts';
 import { bagTotal, rollExpedition } from './expedition-sim';
 
 const SEEDS = Array.from({ length: 2000 }, (_, i) => i * 7919 + 13);
@@ -69,5 +69,9 @@ describe('expedition rolls', () => {
     expect(skillLevelForXp(40)).toBe(2);
     expect(skillLevelForXp(360)).toBe(4);
     expect(skillLevelForXp(1e9)).toBe(10);
+  });
+
+  it('every material found on a trip is used by some recipe', () => {
+    for (const m of MATERIAL_CODES) expect(Object.values(RECIPES).some((r) => (r.inputs[m] ?? 0) > 0)).toBe(true);
   });
 });

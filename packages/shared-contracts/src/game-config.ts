@@ -30,6 +30,7 @@ export const BUSINESS_PRODUCTS = {
   MANGO_STICKY_RICE: { unitCost: 0, minPrice: 20, maxPrice: 70, basePrice: 35, baseDemand: 5, unlockLevel: 1, craftOnly: true },
   JASMINE_GARLAND: { unitCost: 0, minPrice: 15, maxPrice: 60, basePrice: 28, baseDemand: 4, unlockLevel: 1, craftOnly: true },
   HERBAL_BALM: { unitCost: 0, minPrice: 25, maxPrice: 90, basePrice: 45, baseDemand: 3, unlockLevel: 1, craftOnly: true },
+  HONEY_MANGO_JAM: { unitCost: 0, minPrice: 30, maxPrice: 110, basePrice: 55, baseDemand: 2, unlockLevel: 1, craftOnly: true },
 } as const;
 export type BusinessProductCode = keyof typeof BUSINESS_PRODUCTS;
 export const BUSINESS_PRODUCT_CODES = Object.keys(BUSINESS_PRODUCTS) as BusinessProductCode[];

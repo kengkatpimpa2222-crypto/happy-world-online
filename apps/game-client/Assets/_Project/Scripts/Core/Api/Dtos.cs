@@ -154,6 +154,7 @@ namespace HappyWorld.Core.Api
         public int shelfQuantity;
         public bool onStall;
         public int unlockLevel = 1;
+        public bool craftOnly;
     }
 
     /// <summary>Market stall state of the player's shop (Phase 5).</summary>
@@ -180,6 +181,8 @@ namespace HappyWorld.Core.Api
         public int basePrice;
         public int unlockLevel;
         public bool unlocked;
+        /// <summary>Phase 9: made only by crafting expedition materials; can't be restocked with Gold</summary>
+        public bool craftOnly;
     }
 
     public sealed class BusinessFinance
@@ -694,5 +697,116 @@ namespace HappyWorld.Core.Api
             foreach (var p in projects) if (p.Building) return p;
             return null;
         }
+    }
+
+    // ---------- Phase 9: exploring and crafting ----------
+
+    /// <summary>A life skill (EXPLORER, CRAFTER); nextLevelXp is null at the top level.</summary>
+    public sealed class SkillView
+    {
+        public string skill;
+        public int level = 1;
+        public int xp;
+        public int levelXp;
+        public int? nextLevelXp;
+    }
+
+    public sealed class ExpeditionSiteInfo
+    {
+        public string site;
+        public int explorerLevel;
+        public bool unlocked;
+        public int minutes;
+        public int seconds;
+        public List<string> materials = new List<string>();
+        public int eventCount;
+        public int explorerXp;
+    }
+
+    public sealed class ExpeditionEventOutcome
+    {
+        public string @event;
+        public bool success;
+        public Dictionary<string, int> gained = new Dictionary<string, int>();
+        public Dictionary<string, int> lost = new Dictionary<string, int>();
+    }
+
+    public sealed class ExpeditionResult
+    {
+        public Dictionary<string, int> gathered = new Dictionary<string, int>();
+        public List<ExpeditionEventOutcome> events = new List<ExpeditionEventOutcome>();
+        public Dictionary<string, int> loot = new Dictionary<string, int>();
+        public int explorerXp;
+        public int playerXp;
+        public int? playerLevel;
+        public int explorerLevelAfter;
+        public bool explorerLeveledUp;
+    }
+
+    /// <summary>One trip. `result` is null until it is claimed (the server rolls it then).</summary>
+    public sealed class ExpeditionTrip
+    {
+        public string id;
+        public string site;
+        public string plan;
+        public int explorerLevel;
+        public DateTime startedAt;
+        public DateTime endsAt;
+        public int secondsLeft;
+        public bool ready;
+        public bool claimed;
+        public Dictionary<string, float> eventChances = new Dictionary<string, float>();
+        public ExpeditionResult result;
+        // claim response only
+        public bool replayed;
+        public Dictionary<string, SkillView> skills;
+        public Dictionary<string, int> materials;
+    }
+
+    /// <summary>GET /expeditions</summary>
+    public sealed class ExpeditionOverview
+    {
+        public List<ExpeditionSiteInfo> sites = new List<ExpeditionSiteInfo>();
+        public ExpeditionTrip active;
+        public ExpeditionTrip lastClaimed;
+        public Dictionary<string, SkillView> skills = new Dictionary<string, SkillView>();
+        public Dictionary<string, int> materials = new Dictionary<string, int>();
+    }
+
+    public sealed class RecipeInfo
+    {
+        public string recipe;
+        public string productCode;
+        public Dictionary<string, int> inputs = new Dictionary<string, int>();
+        public int outputUnits;
+        public int feeGold;
+        public int crafterLevel;
+        public bool unlocked;
+        public int canMake;
+        public int basePrice;
+    }
+
+    /// <summary>GET /crafting</summary>
+    public sealed class CraftingOverview
+    {
+        public List<RecipeInfo> recipes = new List<RecipeInfo>();
+        public Dictionary<string, int> materials = new Dictionary<string, int>();
+        public SkillView crafter = new SkillView();
+    }
+
+    /// <summary>POST /crafting/craft</summary>
+    public sealed class CraftResult
+    {
+        public bool replayed;
+        public string recipe;
+        public string productCode;
+        public int times;
+        public int unitsMade;
+        public int feeGold;
+        public bool crafterLeveledUp;
+        public int? level;
+        public SkillView crafter;
+        public Dictionary<string, int> materials;
+        public Business business;
     }
 }

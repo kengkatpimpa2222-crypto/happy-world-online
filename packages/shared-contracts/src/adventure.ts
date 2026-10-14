@@ -166,13 +166,15 @@ export interface RecipeDef {
   crafterXp: number;
 }
 
-export const RECIPE_CODES = ['MANGO_STICKY_RICE', 'JASMINE_GARLAND', 'HERBAL_BALM'] as const;
+export const RECIPE_CODES = ['MANGO_STICKY_RICE', 'JASMINE_GARLAND', 'HERBAL_BALM', 'HONEY_MANGO_JAM'] as const;
 export type RecipeCode = (typeof RECIPE_CODES)[number];
 
 export const RECIPES: Record<RecipeCode, RecipeDef> = {
   MANGO_STICKY_RICE: { productCode: 'MANGO_STICKY_RICE', inputs: { MANGO: 1, STICKY_RICE: 1, COCONUT: 1 }, outputUnits: 3, feeGold: 6, crafterLevel: 1, crafterXp: 5 },
   JASMINE_GARLAND: { productCode: 'JASMINE_GARLAND', inputs: { JASMINE: 3, MARIGOLD: 1 }, outputUnits: 2, feeGold: 4, crafterLevel: 1, crafterXp: 4 },
   HERBAL_BALM: { productCode: 'HERBAL_BALM', inputs: { HERB: 2, LEMONGRASS: 1, BEESWAX: 1 }, outputUnits: 2, feeGold: 8, crafterLevel: 2, crafterXp: 8 },
+  // rare wild honey (forest, valley) + orchard mangoes: the priciest good, worth a trip to both places
+  HONEY_MANGO_JAM: { productCode: 'HONEY_MANGO_JAM', inputs: { MANGO: 2, WILD_HONEY: 1 }, outputUnits: 2, feeGold: 6, crafterLevel: 2, crafterXp: 8 },
 };
 /** Most crafts of one recipe in a single request. */
 export const CRAFT_MAX_TIMES = 10;
