@@ -110,7 +110,7 @@ export function seededRandom(seed: string): () => number {
   };
 }
 
-function pickWeighted<T>(rng: () => number, items: readonly T[], weight: (t: T) => number): T {
+export function pickWeighted<T>(rng: () => number, items: readonly T[], weight: (t: T) => number): T {
   const total = items.reduce((a, t) => a + weight(t), 0);
   let r = rng() * total;
   let last: T = items[items.length - 1]!;
@@ -167,7 +167,10 @@ export function simulateCustomers(
   if (stall.length === 0 || toTick <= fromTick) return { visits, stall, totals, perProduct, festivalPoints };
 
   const { customersPerMinute } = businessLevelConfig(level);
-  const unlisted = BUSINESS_PRODUCT_CODES.filter((c) => BUSINESS_PRODUCTS[c].unlockLevel <= level && !stall.some((l) => l.productCode === c));
+  // craft-only goods are a bonus, so nobody asks for them at a stall that doesn't have them
+  const unlisted = BUSINESS_PRODUCT_CODES.filter(
+    (c) => BUSINESS_PRODUCTS[c].unlockLevel <= level && !BUSINESS_PRODUCTS[c].craftOnly && !stall.some((l) => l.productCode === c),
+  );
 
   for (let tick = fromTick + 1; tick <= toTick; tick++) {
     const rng = seededRandom(`${seed}:${tick}`);

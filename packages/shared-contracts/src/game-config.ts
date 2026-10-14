@@ -17,13 +17,19 @@ export function levelForXp(xp: number): number {
 }
 
 // ---- Business simulation ----
-/** `unlockLevel` = shop level needed to stock the product (Phase 5). */
+/**
+ * `unlockLevel` = shop level needed to stock the product (Phase 5).
+ * `craftOnly` = can't be restocked with Gold; made only by crafting materials from expeditions (Phase 9).
+ */
 export const BUSINESS_PRODUCTS = {
-  LEMONADE: { unitCost: 5, minPrice: 6, maxPrice: 20, basePrice: 10, baseDemand: 8, unlockLevel: 1 },
-  BREAD: { unitCost: 8, minPrice: 10, maxPrice: 30, basePrice: 15, baseDemand: 6, unlockLevel: 1 },
-  FLOWER: { unitCost: 12, minPrice: 15, maxPrice: 45, basePrice: 25, baseDemand: 4, unlockLevel: 1 },
-  THAI_TEA: { unitCost: 7, minPrice: 9, maxPrice: 30, basePrice: 15, baseDemand: 7, unlockLevel: 2 },
-  MEATBALL: { unitCost: 10, minPrice: 12, maxPrice: 40, basePrice: 20, baseDemand: 6, unlockLevel: 3 },
+  LEMONADE: { unitCost: 5, minPrice: 6, maxPrice: 20, basePrice: 10, baseDemand: 8, unlockLevel: 1, craftOnly: false },
+  BREAD: { unitCost: 8, minPrice: 10, maxPrice: 30, basePrice: 15, baseDemand: 6, unlockLevel: 1, craftOnly: false },
+  FLOWER: { unitCost: 12, minPrice: 15, maxPrice: 45, basePrice: 25, baseDemand: 4, unlockLevel: 1, craftOnly: false },
+  THAI_TEA: { unitCost: 7, minPrice: 9, maxPrice: 30, basePrice: 15, baseDemand: 7, unlockLevel: 2, craftOnly: false },
+  MEATBALL: { unitCost: 10, minPrice: 12, maxPrice: 40, basePrice: 20, baseDemand: 6, unlockLevel: 3, craftOnly: false },
+  MANGO_STICKY_RICE: { unitCost: 0, minPrice: 20, maxPrice: 70, basePrice: 35, baseDemand: 5, unlockLevel: 1, craftOnly: true },
+  JASMINE_GARLAND: { unitCost: 0, minPrice: 15, maxPrice: 60, basePrice: 28, baseDemand: 4, unlockLevel: 1, craftOnly: true },
+  HERBAL_BALM: { unitCost: 0, minPrice: 25, maxPrice: 90, basePrice: 45, baseDemand: 3, unlockLevel: 1, craftOnly: true },
 } as const;
 export type BusinessProductCode = keyof typeof BUSINESS_PRODUCTS;
 export const BUSINESS_PRODUCT_CODES = Object.keys(BUSINESS_PRODUCTS) as BusinessProductCode[];

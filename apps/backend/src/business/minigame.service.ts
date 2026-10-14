@@ -62,6 +62,9 @@ export class MinigameService {
   }
 
   async start(userId: string, businessId: string, productCode: BusinessProductCode) {
+    if (BUSINESS_PRODUCTS[productCode].craftOnly) {
+      throw AppException.badRequest(ErrorCode.NO_MINIGAME_FOR_PRODUCT, 'This product is made by crafting, not in a mini-game', { productCode });
+    }
     const game = minigameForProduct(productCode);
     const now = Date.now();
     const session = await this.prisma.tx(async (tx) => {

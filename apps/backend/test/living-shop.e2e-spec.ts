@@ -61,6 +61,10 @@ describe('Living shop (Phase 5)', () => {
       ['FLOWER', true],
       ['THAI_TEA', false],
       ['MEATBALL', false],
+      // Phase 9: craft-only goods (made from expedition materials)
+      ['MANGO_STICKY_RICE', true],
+      ['JASMINE_GARLAND', true],
+      ['HERBAL_BALM', true],
     ]);
     // the Phase 2 fields are still there
     expect(shop.products[0]).toMatchObject({ productCode: 'LEMONADE', quantity: 0, shelfQuantity: 0, onStall: false, unitCost: 5 });

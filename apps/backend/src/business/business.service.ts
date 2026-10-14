@@ -82,6 +82,9 @@ export class BusinessService {
   async restock(userId: string, id: string, dto: RestockRequest, idempotencyKey: string) {
     const code = dto.productCode as BusinessProductCode;
     const product = BUSINESS_PRODUCTS[code];
+    if (product.craftOnly) {
+      throw AppException.badRequest(ErrorCode.PRODUCT_CRAFT_ONLY, 'This product is made by crafting, it cannot be bought', { productCode: code });
+    }
     const cost = product.unitCost * dto.quantity;
 
     const settled: SettleResult[] = [];
@@ -279,6 +282,7 @@ export class BusinessService {
           maxPrice: p.maxPrice,
           basePrice: p.basePrice,
           unlockLevel: p.unlockLevel,
+          craftOnly: p.craftOnly,
         };
       }),
       // ---- living shop (Phase 5) ----
@@ -295,7 +299,7 @@ export class BusinessService {
       /** every product of the game, so the client can show what unlocks at which level */
       catalog: BUSINESS_PRODUCT_CODES.map((code) => {
         const p = BUSINESS_PRODUCTS[code];
-        return { productCode: code, unitCost: p.unitCost, minPrice: p.minPrice, maxPrice: p.maxPrice, basePrice: p.basePrice, unlockLevel: p.unlockLevel, unlocked: p.unlockLevel <= b.level };
+        return { productCode: code, unitCost: p.unitCost, minPrice: p.minPrice, maxPrice: p.maxPrice, basePrice: p.basePrice, unlockLevel: p.unlockLevel, unlocked: p.unlockLevel <= b.level, craftOnly: p.craftOnly };
       }),
     };
   }
