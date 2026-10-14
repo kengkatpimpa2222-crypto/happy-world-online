@@ -165,3 +165,34 @@ curl -s $API/city/growth -H "authorization: Bearer $TOKEN"
 | POST | `/minigames/:id/finish` | `{score}` ส่งก่อนหมดเวลาเกิน 3 วิ = `MINIGAME_TOO_EARLY`, ช้ากว่าหมดเวลาเกิน 10 นาที = `MINIGAME_EXPIRED`, คะแนนเกินเพดานเกม = `MINIGAME_SCORE_INVALID` เรียกซ้ำได้ผลเดิม (`replayed: true`) ไม่ได้ของซ้ำ คืน `{stars, rewarded, unitsAwarded, xpAwarded, stockFull, level, best, rewardedPlaysLeft, business}` |
 
 คลังเต็มจะได้ของเท่าที่ใส่ได้ (`stockFull: true`) จบรอบนับเควส `PLAY_MINIGAME` (เควสใหม่ "ทำของขายเอง 3 รอบ")
+
+## ออกสำรวจและงานฝีมือ (Phase 9)
+
+วงจรวัตถุดิบ: ออกสำรวจ → ได้วัตถุดิบ → คราฟต์เป็นสินค้าพิเศษเข้าคลังร้าน → วางขายให้ลูกค้า NPC กติกาทั้งหมดอยู่ใน `packages/shared-contracts/src/adventure.ts`
+
+| สถานที่ | ต้องเป็นนักสำรวจ Lv. | เวลา | เหตุการณ์ | วัตถุดิบ |
+|---|---|---|---|---|
+| ORCHARD สวนผลไม้ริมคลอง | 1 | 3 นาที | 2 จาก 3 | MANGO, COCONUT, STICKY_RICE |
+| FLOWER_FOREST ป่าดอกไม้ | 2 | 6 นาที | 3 จาก 3 | JASMINE, MARIGOLD, WILD_HONEY |
+| HERB_VALLEY หุบเขาสมุนไพร | 4 | 10 นาที | 3 จาก 4 | LEMONGRASS, HERB, BEESWAX, WILD_HONEY |
+
+แผน: `CAREFUL` (โอกาสผ่าน +20%, เก็บได้ 70%, พลาดไม่เสียของ), `STEADY` (ปกติ), `BOLD` (โอกาสผ่าน -15%, เก็บได้ 150%, พลาดแล้วของหาย) นักสำรวจแต่ละเลเวลเพิ่มโอกาสผ่าน 6%
+
+| Method | Path | หมายเหตุ |
+|---|---|---|
+| GET | `/expeditions` | สถานที่ (`unlocked`, `seconds`), แผน, ทริปที่กำลังไป (`active`), ทริปล่าสุด, ทักษะ `EXPLORER`/`CRAFTER` และวัตถุดิบของฉัน |
+| POST | `/expeditions/start` | `{site, plan}` ไปได้ทีละทริป (`EXPEDITION_IN_PROGRESS`), สถานที่ยังล็อก = `EXPEDITION_LOCKED` server สุ่ม seed เก็บไว้ ไม่ส่งให้เครื่อง |
+| POST | `/expeditions/:id/claim` | ยังไม่ถึงเวลา = `EXPEDITION_NOT_FINISHED` (`secondsLeft`) ถึงแล้ว server คำนวณเรื่องราวและของที่ได้ คืน `{result: {gathered, events[], loot, explorerXp, playerXp, ...}, skills, materials}` เรียกซ้ำได้ผลเดิม (`replayed: true`) |
+| GET | `/crafting` | สูตร (วัตถุดิบที่ใช้, ได้กี่ชิ้น, ค่าแรง, ทำได้กี่ครั้ง `canMake`), วัตถุดิบของฉัน, ทักษะช่าง |
+| POST | `/crafting/craft` | ต้องมี `Idempotency-Key` `{recipe, businessId, times 1-10}` จ่ายค่าแรง Gold ใช้วัตถุดิบ ใส่สินค้าเข้าคลังร้าน วัตถุดิบไม่พอ = `NOT_ENOUGH_MATERIALS`, สูตรล็อก = `RECIPE_LOCKED`, คลังเต็ม = `BUSINESS_STOCK_FULL` |
+
+| สูตร | ใช้ | ได้ | ค่าแรง | ช่าง Lv. | ราคาตลาด |
+|---|---|---|---|---|---|
+| MANGO_STICKY_RICE | มะม่วง 1 + ข้าวเหนียว 1 + มะพร้าว 1 | 3 | 6 | 1 | 35 |
+| JASMINE_GARLAND | มะลิ 3 + ดาวเรือง 1 | 2 | 4 | 1 | 28 |
+| HERBAL_BALM | สมุนไพร 2 + ตะไคร้ 1 + ขี้ผึ้ง 1 | 2 | 8 | 2 | 45 |
+| HONEY_MANGO_JAM | มะม่วง 2 + น้ำผึ้งป่า 1 | 2 | 6 | 2 | 55 |
+
+ช่างเลเวล 4, 7, 10 ได้เพิ่มครั้งละ 1 ชิ้น สินค้าเหล่านี้เป็น `craftOnly`: `POST /businesses/:id/restock` ตอบ `PRODUCT_CRAFT_ONLY` และ `POST /minigames/start` ตอบ `NO_MINIGAME_FOR_PRODUCT` ต้นทุนต่อชิ้นของร้าน = ค่าแรง ÷ จำนวนชิ้น (วัตถุดิบจ่ายด้วยเวลา เหมือนของจากมินิเกม) ค่าแรงลงเป็นรายจ่ายของร้าน
+
+ทดสอบบนเครื่อง: `EXPEDITION_TIME_SCALE=0.02` ทำให้ทริป 3 นาทีเหลือ 4 วินาที (ห้ามใช้ใน production ระบบไม่ยอมเปิด)
