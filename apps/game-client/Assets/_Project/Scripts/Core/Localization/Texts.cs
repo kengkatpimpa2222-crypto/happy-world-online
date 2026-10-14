@@ -114,8 +114,10 @@ namespace HappyWorld.Core.Localization
             ["festival.flower"] = "เทศกาลดอกไม้บาน",
             ["festival.street_food"] = "ถนนคนเดินของกินเล่น",
             ["festival.lantern"] = "คืนโคมไฟ",
-            ["festival.tier.1"] = "ประดับธงทั้งเมือง",
-            ["festival.tier.2"] = "โคมไฟส่องสว่าง",
+            // Names follow what FestivalDecor shows: flags and the gate are up as soon as the festival starts,
+            // so tier 1 adds lanterns and tier 2 the twinkling lights (the old names were one tier off).
+            ["festival.tier.1"] = "แขวนโคมไฟทั้งเมือง",
+            ["festival.tier.2"] = "ไฟกะพริบส่องสว่าง",
             ["festival.tier.3"] = "พลุเต็มฟ้า",
 
             // items and quests by id (apps/backend/src/database/seed-data.ts)

@@ -244,6 +244,13 @@ namespace HappyWorld.Unity.UI
 
         // Currency is spelled out (ทอง/เพชร): the bundled Thai font has no emoji glyphs, so 🪙/💎 rendered as
         // nothing on Android and prices showed as bare numbers (Phase 4.5).
+        /// <summary>Quest and festival rewards can level the player up; the HUD reads the cached profile, so
+        /// copy the new level in (it kept showing "Lv.1" after the server said 2, Phase 6 QA).</summary>
+        private void ApplyLevel(int? level)
+        {
+            if (level.HasValue && _s.Profile != null) _s.Profile.level = level.Value;
+        }
+
         public void RefreshHud()
         {
             var p = _s.Profile;
@@ -344,6 +351,7 @@ namespace HappyWorld.Unity.UI
                         var res = await _s.Api.ClaimFestivalAsync(key, tier);
                         Toast("ได้รับ " + Texts.T("ui.gold") + " " + res.rewards.gold + "  XP " + res.rewards.xp +
                               (res.rewards.itemId != null ? "  และ " + Texts.T(res.rewards.itemId) : "") + (res.level.HasValue ? "  เลเวล " + res.level : ""));
+                        ApplyLevel(res.level);
                         RefreshHud();
                         ShowFestival();
                     }), 170);
@@ -530,6 +538,8 @@ namespace HappyWorld.Unity.UI
                         {
                             var r = await _s.Api.ClaimQuestAsync(id);
                             Toast("ได้รับ " + Texts.T("ui.gold") + " " + r.rewards.gold + (r.rewards.gems > 0 ? " " + Texts.T("ui.gems") + " " + r.rewards.gems : "") + (r.level.HasValue ? "  เลเวล " + r.level : ""));
+                            ApplyLevel(r.level);
+                            RefreshHud();
                             ShowQuests();
                         }));
                     else if (q.canStart && q.progress == null)
