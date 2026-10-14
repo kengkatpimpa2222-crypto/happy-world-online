@@ -213,6 +213,7 @@ namespace HappyWorld.Unity.World
                 case "WORKER": shirt = new Color(0.35f, 0.5f, 0.8f); hair = new Color(0.25f, 0.15f, 0.1f); break;
                 case "TOURIST": shirt = new Color(1f, 0.6f, 0.3f); hair = new Color(0.85f, 0.7f, 0.4f); break;
                 case "GRANDMA": shirt = new Color(0.65f, 0.45f, 0.75f); hair = new Color(0.85f, 0.85f, 0.85f); break;
+                case "FESTIVAL_GOER": shirt = new Color(1f, 0.45f, 0.65f); hair = new Color(0.3f, 0.2f, 0.15f); break;
                 default: shirt = Color.white; hair = Color.black; break;
             }
             var t = root.transform;
@@ -220,6 +221,8 @@ namespace HappyWorld.Unity.World
             Strip(CityBuilder.Prim(PrimitiveType.Cube, t, new Vector3(0, 1.0f, 0), new Vector3(0.62f, 0.5f, 0.42f), shirt, "Shirt"));
             Strip(CityBuilder.Prim(PrimitiveType.Sphere, t, new Vector3(0, 1.5f, 0), new Vector3(0.5f, 0.5f, 0.5f), new Color(1f, 0.85f, 0.7f), "Head"));
             Strip(CityBuilder.Prim(PrimitiveType.Sphere, t, new Vector3(0, 1.62f, -0.04f), new Vector3(0.54f, 0.34f, 0.54f), hair, "Hair"));
+            if (plan.Visit.customerType == "FESTIVAL_GOER") // party hat
+                Strip(CityBuilder.Prim(PrimitiveType.Cylinder, t, new Vector3(0, 1.92f, 0), new Vector3(0.22f, 0.16f, 0.22f), new Color(1f, 0.85f, 0.2f), "PartyHat"));
             if (plan.Visit.customerType == "TOURIST")
                 Strip(CityBuilder.Prim(PrimitiveType.Cylinder, t, new Vector3(0, 1.82f, 0), new Vector3(0.7f, 0.03f, 0.7f), new Color(0.95f, 0.9f, 0.6f), "Hat"));
             CityBuilder.Label(t, new Vector3(0, 2.15f, 0), MarketNpcPlanner.CustomerName(plan.Visit.customerType), 0.09f, new Color(0.9f, 0.95f, 1f));

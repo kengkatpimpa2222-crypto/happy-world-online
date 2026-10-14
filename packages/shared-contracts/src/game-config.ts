@@ -86,6 +86,8 @@ export type ShopStatusValue = 'CLOSED' | 'OPEN' | 'PAUSED';
 export interface NpcCustomerType {
   /** relative chance to be this type */
   weight: number;
+  /** relative chance while a city festival is running (Phase 6); missing = same as weight */
+  festivalWeight?: number;
   /** budget per unit = market (base) price x uniform[budgetMin, budgetMax] */
   budgetMin: number;
   budgetMax: number;
@@ -100,6 +102,8 @@ export const NPC_CUSTOMER_TYPES = {
   WORKER: { weight: 30, budgetMin: 0.9, budgetMax: 1.4, qtyMin: 1, qtyMax: 2, likes: { BREAD: 3, THAI_TEA: 2, MEATBALL: 3 } },
   TOURIST: { weight: 15, budgetMin: 1.0, budgetMax: 1.8, qtyMin: 1, qtyMax: 3, likes: { FLOWER: 4, LEMONADE: 2 } },
   GRANDMA: { weight: 20, budgetMin: 0.75, budgetMax: 1.25, qtyMin: 2, qtyMax: 3, likes: { BREAD: 3, FLOWER: 3 } },
+  // Only comes to town for festivals (weight 0 otherwise, so ordinary days are unchanged).
+  FESTIVAL_GOER: { weight: 0, festivalWeight: 25, budgetMin: 1.1, budgetMax: 1.7, qtyMin: 1, qtyMax: 3, likes: {} },
 } as const satisfies Record<string, NpcCustomerType>;
 export type NpcCustomerTypeCode = keyof typeof NPC_CUSTOMER_TYPES;
 export const NPC_CUSTOMER_TYPE_CODES = Object.keys(NPC_CUSTOMER_TYPES) as NpcCustomerTypeCode[];

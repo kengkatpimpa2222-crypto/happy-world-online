@@ -40,7 +40,8 @@ socket.on('ready', () => socket.emitWithAck('zone:join', { zone: 'PLAZA' }));
 | `session:replaced` | ถูกแทนที่ด้วยการเชื่อมต่อใหม่ |
 | `market:activity` | (Phase 5) ส่งให้ทุกคนในโซน MARKET ของ age band เดียวกับแผง: `{ slot, businessId, tick, tickSeconds, visits: [{ index, customerType, productCode, outcome, quantity }] }` ลูกค้า NPC ของนาทีล่าสุด (สูงสุด 8 คน) `outcome` = `BOUGHT \| TOO_EXPENSIVE \| SOLD_OUT \| NOT_SELLING` |
 | `market:stall` | (Phase 5) `{ slot }` แผงเปิด/พัก/ปิด/เปลี่ยนของหรือราคา ให้ client โหลด `GET /market` ใหม่ |
-| `shop:updated` | (Phase 5) ส่งให้เจ้าของร้านเท่านั้น: `{ businessId, cashBox, customers, buyers, unitsSold, revenue, stall: [{ productCode, shelfQuantity }] }` |
+| `shop:updated` | (Phase 5) ส่งให้เจ้าของร้านเท่านั้น: `{ businessId, cashBox, customers, buyers, unitsSold, revenue, stall: [{ productCode, shelfQuantity }], festivalPoints }` (`festivalPoints` เพิ่มใน Phase 6 = สินค้าเทศกาลที่ขายได้ในรอบนี้) |
+| `festival:milestone` | (Phase 6) ส่งให้ทุกคนในทุกโซนของเมืองช่วงอายุเดียวกัน เมื่อการขายทำให้เมืองถึงขั้นใหม่: `{ festivalKey, code, tier, points }` client ประดับเมืองเพิ่มและจุดพลุ |
 
 `PublicPlayer = { userId, displayName, level, avatar, x, y, dir }` ไม่มี friend code, อีเมล หรือช่วงอายุ
 

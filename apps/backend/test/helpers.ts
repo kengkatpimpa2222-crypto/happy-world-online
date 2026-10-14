@@ -97,3 +97,22 @@ export function receivedWithin<T = Record<string, unknown>>(socket: Socket, even
     () => false,
   );
 }
+
+// ---------- Phase 6 helpers ----------
+import { FESTIVAL_EPOCH_MS, FESTIVAL_WEEK_MS, festivalWeekIndex } from '@hwo/shared-contracts';
+import { FestivalService } from '../src/festival/festival.service';
+
+/**
+ * Pins the festival calendar for a test file, whatever day the tests really run on:
+ * 'weekday' = Wednesday noon (no festival), 'festival' = Saturday noon (festival running),
+ * 'next-weekday' = Wednesday noon of the following week (last week's rewards still claimable).
+ */
+export function setFestivalClock(app: INestApplication, when: 'weekday' | 'festival' | 'next-weekday'): FestivalService {
+  const svc = app.get(FestivalService);
+  const now = Date.now();
+  const week = festivalWeekIndex(now) + (when === 'next-weekday' ? 1 : 0);
+  const day = 24 * 3600_000;
+  const target = FESTIVAL_EPOCH_MS + week * FESTIVAL_WEEK_MS + (when === 'festival' ? 5.5 : 2.5) * day;
+  svc.clockOffsetMs = target - now;
+  return svc;
+}

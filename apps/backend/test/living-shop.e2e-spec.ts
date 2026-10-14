@@ -4,7 +4,7 @@ import type { Socket } from 'socket.io-client';
 import { LivingShopService } from '../src/business/living-shop.service';
 import { ShopSettlerService } from '../src/business/shop-settler.service';
 import { PrismaService } from '../src/prisma/prisma.service';
-import { connectWs, createTestApp, grantGold, key, newGuest, TestPlayer, waitFor } from './helpers';
+import { connectWs, createTestApp, grantGold, key, newGuest, setFestivalClock, TestPlayer, waitFor } from './helpers';
 
 type Ack = { ok: boolean; error?: { code: string }; [k: string]: unknown };
 
@@ -18,6 +18,8 @@ describe('Living shop (Phase 5)', () => {
   beforeAll(async () => {
     ({ app, prisma, http } = await createTestApp());
     shopSvc = app.get(LivingShopService);
+    // Phase 5 expectations are about ordinary days; festivals (Phase 6) have their own tests.
+    setFestivalClock(app, 'weekday');
   });
   afterEach(() => {
     sockets.splice(0).forEach((s) => s.disconnect());
@@ -296,11 +298,20 @@ describe('Living shop (Phase 5)', () => {
       if (m.slot === opened.stall.slot) activities.push(m);
     });
     const update = waitFor<{ businessId: string; cashBox: number }>(so, 'shop:updated', (m) => m.businessId === id, 10000);
-    // only the latest minute is animated and it may have had no customers: let a few minutes "pass"
-    for (let tries = 0; tries < 20 && activities.length === 0; tries++) {
-      await timeTravel(id, 5);
-      await app.get(ShopSettlerService).runOnce();
-      await new Promise((r) => setTimeout(r, 100));
+    // Only the latest minute is animated, and about 1 minute in 4 has no customer at level 1. Customers are
+    // deterministic per minute, so retrying within the same real minute replays the same empty minute (this
+    // was the occasional failure): move the shop's clock forward one minute per try instead.
+    const base = shopSvc.nowTick();
+    const clock = jest.spyOn(shopSvc, 'nowTick');
+    try {
+      for (let tries = 0; tries < 20 && activities.length === 0; tries++) {
+        clock.mockReturnValue(base + tries);
+        if (tries === 0) await timeTravel(id, 5);
+        await app.get(ShopSettlerService).runOnce();
+        await new Promise((r) => setTimeout(r, 100));
+      }
+    } finally {
+      clock.mockRestore();
     }
     expect(activities.length).toBeGreaterThan(0);
     const a = activities[0]!;

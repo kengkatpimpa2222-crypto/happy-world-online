@@ -109,3 +109,21 @@ curl -s -XPOST $API/businesses/$SHOP/collect -H "authorization: Bearer $TOKEN" -
 
 `GET /businesses` และ `GET /businesses/:id` คืน field เดิมทั้งหมด และเพิ่ม `products[].shelfQuantity/onStall/unlockLevel`, `stall { status, slot, cashBox, totalCustomers, shelfSlots, shelfCapacity, customersPerMinute, slotsUsed }` และ `catalog[]` (สินค้าทุกชนิดพร้อมเลเวลที่ปลดล็อก) การอ่านร้านจะคำนวณลูกค้าที่ค้างอยู่ก่อนเสมอ
 
+## เทศกาลเมือง (Phase 6)
+
+ทุกสัปดาห์มีเทศกาล 1 งาน (หมุนเวียน 5 งาน) จัด **ศุกร์ 00:00 ถึงอาทิตย์ 24:00 เวลาไทย** ระหว่างงาน ลูกค้า NPC อยากได้สินค้าหลักของงาน x3 และสินค้ารอง x2 คนในตลาดมากขึ้น x1.3 และมี "นักเที่ยวงาน" (`FESTIVAL_GOER`) มาด้วย ทุกชิ้นของสินค้าเทศกาลที่ขายได้นับเป็นแต้มของผู้เล่นและของทั้งเมือง (แยกตามช่วงอายุ) เมืองถึงขั้นที่ 150 / 500 / 1200 ชิ้น ผู้ที่ช่วยขายอย่างน้อย 10 ชิ้นรับรางวัลขั้นนั้นได้ (ขั้น 3 ได้เฟอร์นิเจอร์ที่ระลึกของงาน)
+
+```bash
+curl -s $API/festival -H "authorization: Bearer $TOKEN"
+# -> { now, current: { key: "COOL_SUMMER-40", status: UPCOMING|ACTIVE|ENDED, startsAt, endsAt, featured[], city { points, contributors, tiersReached },
+#      tiers[{ tier, target, reached, rewardGold, rewardXp, rewardItemId, claimed, claimable }], me { points, minToClaim }, top[] }, previous }
+curl -s -XPOST $API/festival/claim -H "authorization: Bearer $TOKEN" -H 'content-type: application/json' -d '{"festivalKey":"COOL_SUMMER-40","tier":1}'
+```
+
+| Method | Path | หมายเหตุ |
+|---|---|---|
+| GET | `/festival` | เทศกาลของสัปดาห์นี้ (กำลังจะเริ่มหรือกำลังจัด) + `previous` = สัปดาห์ก่อน เฉพาะเมื่อยังมีรางวัลให้รับ `top` = ผู้ช่วย 5 อันดับ ช่วงอายุเดียวกัน ไม่รวมคนที่บล็อกกัน ผู้เล่นอายุต่ำกว่า 13 ไม่เห็นชื่อคนอื่น |
+| POST | `/festival/claim` | `{ festivalKey, tier }` รับได้ครั้งเดียวต่อขั้น จ่ายผ่าน ledger (`FESTIVAL_REWARD`) รับของสัปดาห์นี้หรือสัปดาห์ก่อนได้ error: `FESTIVAL_NOT_FOUND` (404), `FESTIVAL_CLAIM_EXPIRED`, `FESTIVAL_TIER_NOT_REACHED`, `FESTIVAL_NOT_ENOUGH_CONTRIBUTION`, `FESTIVAL_ALREADY_CLAIMED` (409) |
+
+ปฏิทินคำนวณจากนาฬิกาล้วน ๆ (`packages/shared-contracts/src/festival.ts`) ไม่ต้องตั้งค่าใน DB สำหรับทดสอบบนเครื่อง ตั้ง `FESTIVAL_CLOCK_OFFSET_HOURS` เพื่อเลื่อนปฏิทิน (ห้ามใช้ใน production ระบบไม่ยอมเปิด)
+

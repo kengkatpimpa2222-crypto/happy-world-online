@@ -155,6 +155,11 @@ namespace HappyWorld.Core.Api
             SendAsync<JObject>("POST", "/businesses/" + businessId + "/report/ack", new { until = untilIso });
         public Task<MarketState> GetMarketAsync() => SendAsync<MarketState>("GET", "/market");
 
+        // ---------- City festival (Phase 6) ----------
+        public Task<FestivalState> GetFestivalAsync() => SendAsync<FestivalState>("GET", "/festival");
+        public Task<FestivalClaimResult> ClaimFestivalAsync(string festivalKey, int tier) =>
+            SendAsync<FestivalClaimResult>("POST", "/festival/claim", new { festivalKey, tier });
+
         // ---------- Friends / safety ----------
         public Task<FriendRequestResult> SendFriendRequestByCodeAsync(string friendCode) =>
             SendAsync<FriendRequestResult>("POST", "/friends/requests", new { friendCode = friendCode.Trim().ToUpperInvariant() });

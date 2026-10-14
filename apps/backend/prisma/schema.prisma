@@ -39,6 +39,7 @@ enum WalletTransactionType {
   BUSINESS_SALE
   BUSINESS_UPGRADE
   MINIGAME_REWARD
+  FESTIVAL_REWARD
   IAP_GRANT
   IAP_REFUND
   ADMIN_ADJUSTMENT
@@ -75,6 +76,7 @@ enum QuestObjectiveType {
   PLAY_MINIGAME
   SHOP_OPEN
   SHOP_SERVE_CUSTOMERS
+  FESTIVAL_CONTRIBUTE
 }
 
 /// สถานะแผงร้านในตลาด (Phase 5)
@@ -151,24 +153,26 @@ model User {
   updatedAt         DateTime   @updatedAt @map("updated_at")
   deletedAt         DateTime?  @map("deleted_at")
 
-  profile            PlayerProfile?
-  wallets            PlayerWallet[]
-  walletTransactions WalletTransaction[]
-  inventory          PlayerInventory[]
-  home               PlayerHome?
-  businesses         Business[]
-  questProgress      QuestProgress[]
-  sessions           GameSession[]
-  purchases          Purchase[]
-  subscriptions      Subscription[]
-  friends            Friend[]            @relation("UserFriends")
-  friendOf           Friend[]            @relation("FriendOfUser")
-  sentRequests       FriendRequest[]     @relation("SentRequests")
-  receivedRequests   FriendRequest[]     @relation("ReceivedRequests")
-  blocking           BlockedPlayer[]     @relation("Blocker")
-  blockedBy          BlockedPlayer[]     @relation("Blocked")
-  reportsMade        ModerationReport[]  @relation("Reporter")
-  reportsReceived    ModerationReport[]  @relation("Reported")
+  profile               PlayerProfile?
+  wallets               PlayerWallet[]
+  walletTransactions    WalletTransaction[]
+  inventory             PlayerInventory[]
+  home                  PlayerHome?
+  businesses            Business[]
+  questProgress         QuestProgress[]
+  sessions              GameSession[]
+  purchases             Purchase[]
+  subscriptions         Subscription[]
+  friends               Friend[]               @relation("UserFriends")
+  friendOf              Friend[]               @relation("FriendOfUser")
+  sentRequests          FriendRequest[]        @relation("SentRequests")
+  receivedRequests      FriendRequest[]        @relation("ReceivedRequests")
+  blocking              BlockedPlayer[]        @relation("Blocker")
+  blockedBy             BlockedPlayer[]        @relation("Blocked")
+  reportsMade           ModerationReport[]     @relation("Reporter")
+  reportsReceived       ModerationReport[]     @relation("Reported")
+  festivalContributions FestivalContribution[]
+  festivalClaims        FestivalRewardClaim[]
 
   @@index([deviceIdHash])
   @@map("users")
@@ -418,6 +422,51 @@ model ShopSettlement {
 }
 
 // ---------- Quests ----------
+
+// ---------- City festivals (Phase 6) ----------
+
+/// ความคืบหน้าของทั้งเมืองในเทศกาลหนึ่ง แยกตามช่วงอายุ (แต่ละช่วงอายุมีเมืองของตัวเอง)
+model FestivalCityProgress {
+  festivalKey  String   @map("festival_key") @db.VarChar(40)
+  ageBand      AgeBand  @map("age_band")
+  /// CHECK (points >= 0)
+  points       Int      @default(0)
+  contributors Int      @default(0)
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@id([festivalKey, ageBand])
+  @@map("festival_city_progress")
+}
+
+/// ส่วนที่ผู้เล่นแต่ละคนช่วยเมือง (จำนวนสินค้าเทศกาลที่ขายได้)
+model FestivalContribution {
+  festivalKey String   @map("festival_key") @db.VarChar(40)
+  userId      String   @map("user_id") @db.Uuid
+  ageBand     AgeBand  @map("age_band")
+  /// CHECK (points >= 0)
+  points      Int      @default(0)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([festivalKey, userId])
+  @@index([festivalKey, ageBand, points(sort: Desc)])
+  @@map("festival_contributions")
+}
+
+/// รางวัลขั้นของเมืองที่ผู้เล่นรับแล้ว (รับได้ครั้งเดียวต่อขั้น)
+model FestivalRewardClaim {
+  festivalKey String   @map("festival_key") @db.VarChar(40)
+  userId      String   @map("user_id") @db.Uuid
+  tier        Int
+  claimedAt   DateTime @default(now()) @map("claimed_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([festivalKey, userId, tier])
+  @@map("festival_reward_claims")
+}
 
 model Quest {
   id                  String             @id @db.VarChar(64)

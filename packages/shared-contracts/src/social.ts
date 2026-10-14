@@ -170,5 +170,8 @@ export const WsEvent = {
   MARKET_STALL_CHANGED: 'market:stall',
   /** to the owner only: cash box / shelf changed after customers bought something */
   SHOP_UPDATED: 'shop:updated',
+  // Phase 6: city festivals
+  /** the city (age band) reached a festival tier: every zone of that age band */
+  FESTIVAL_MILESTONE: 'festival:milestone',
   ERROR: 'error:app',
 } as const;

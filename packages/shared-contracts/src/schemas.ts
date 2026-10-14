@@ -140,5 +140,12 @@ export const ackShopReportSchema = z
   .strict();
 export type AckShopReportRequest = z.infer<typeof ackShopReportSchema>;
 
+export const claimFestivalSchema = z.object({
+  /** e.g. "BAKERY-41" from GET /festival */
+  festivalKey: z.string().regex(/^[A-Z_]{2,30}-\d{1,6}$/),
+  tier: z.number().int().min(1).max(3),
+});
+export type ClaimFestivalRequest = z.infer<typeof claimFestivalSchema>;
+
 export const uuidParamSchema = z.uuid();
 export const questIdParamSchema = z.string().regex(/^[a-z0-9_]{2,64}$/);

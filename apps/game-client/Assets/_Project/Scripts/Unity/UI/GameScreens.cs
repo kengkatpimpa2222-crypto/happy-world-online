@@ -21,6 +21,8 @@ namespace HappyWorld.Unity.UI
         private readonly RectTransform _root, _screen, _hud, _modalLayer, _toastLayer;
         private RectTransform _banner;
         private Text _nameText, _moneyText, _zoneText, _cashText;
+        private Text _festivalText;
+        private Image _festivalBg;
         private float _lastSaleToast = -999f;
 
         public VirtualJoystick Joystick { get; private set; }
@@ -203,6 +205,13 @@ namespace HappyWorld.Unity.UI
             _zoneText.gameObject.AddComponent<Shadow>();
             _zoneText.rectTransform.Place(new Vector2(0.38f, 0.9f), new Vector2(0.62f, 0.98f));
 
+            // Phase 6: this week's city festival (tap for goals and rewards)
+            var fest = UiKit.Button(_hud, Texts.T("ui.festival"), new Color(1f, 0.84f, 0.31f, 0.92f), ShowFestival, 26);
+            fest.GetComponent<RectTransform>().Place(new Vector2(0.36f, 0.82f), new Vector2(0.64f, 0.895f));
+            _festivalBg = fest.GetComponent<Image>();
+            _festivalText = fest.GetComponentInChildren<Text>();
+            _festivalText.color = UiKit.Ink;
+
             var buttons = new (string key, Action open)[]
             {
                 ("ui.profile", ShowProfile),
@@ -263,6 +272,93 @@ namespace HappyWorld.Unity.UI
             {
                 _lastSaleToast = Time.time;
                 Toast("ลูกค้าซื้อของที่ร้าน " + u.unitsSold + " ชิ้น (+" + u.revenue + " ทอง เข้าลิ้นชัก)", "ดูร้าน", ShowShop);
+            }
+        }
+
+        // ---------- city festival (Phase 6) ----------
+
+        /// <summary>Updates the HUD festival button from GET /festival.</summary>
+        public void SetFestival(FestivalState st)
+        {
+            if (_festivalText == null || st == null || st.current == null) return;
+            var f = st.current;
+            float r, g, b;
+            FestivalPresenter.ParseColor(f.color, out r, out g, out b);
+            _festivalBg.color = f.status == "UPCOMING" ? new Color(1f, 1f, 1f, 0.85f) : new Color(r, g, b, 0.92f);
+            var claimable = f.ClaimableCount() + (st.previous != null ? st.previous.ClaimableCount() : 0);
+            _festivalText.text = FestivalPresenter.Banner(f, _s.ServerNow) + (claimable > 0 ? "  <b>มีรางวัล!</b>" : "");
+        }
+
+        public void ShowFestival()
+        {
+            var list = OpenModal(Texts.T("ui.festival"));
+            Loading(list);
+            _s.Run(async () =>
+            {
+                var st = await _s.Api.GetFestivalAsync();
+                _s.OnFestival(st);
+                UiKit.Clear(list);
+                FillFestival(list, st.current, true);
+                if (st.previous != null)
+                {
+                    UiKit.Row(list, "<b>รางวัลจากเทศกาลที่แล้ว</b> (รับได้ถึงก่อนเทศกาลหน้าจบ)", 70);
+                    FillFestival(list, st.previous, false);
+                }
+            });
+        }
+
+        private void FillFestival(RectTransform list, FestivalInfo f, bool full)
+        {
+            var now = _s.ServerNow;
+            var name = FestivalPresenter.Name(f);
+            var when = f.status == "UPCOMING" ? "เริ่มวันศุกร์ · " + FestivalPresenter.TimeLeft(f.startsAt - now)
+                : f.Active ? "กำลังจัดงาน! จบ" + FestivalPresenter.TimeLeft(f.endsAt - now) : "จบแล้ว";
+            UiKit.Row(list, "<b>" + name + "</b>\n<size=24>" + when + "</size>", 110);
+
+            if (full)
+            {
+                var featured = string.Join("  ·  ", f.featured.Select(x => MarketNpcPlanner.ProductName(x.productCode) + " ลูกค้าอยากได้ x" + x.demand));
+                var shopRow = UiKit.Row(list, "<size=26>ของเทศกาล: " + featured + "\nขายของเทศกาลที่แผงในตลาด ทุกชิ้นช่วยทั้งเมือง</size>", 110);
+                UiKit.RowButton(shopRow, "จัดร้าน", UiKit.Good, ShowShop, 150);
+            }
+
+            // the city's progress, as a bar toward the next tier
+            var next = f.NextTier();
+            var cityRow = UiKit.Row(list, "<size=26>ทั้งเมืองขายของเทศกาลแล้ว <b>" + f.city.points + "</b> ชิ้น · ผู้ช่วย " + f.city.contributors + " คน" +
+                (next != null ? " · ขั้นต่อไปที่ " + next.target : " · ครบทุกขั้นแล้ว!") + "</size>", 100);
+            var track = UiKit.Box("Track", cityRow, new Color(0.88f, 0.88f, 0.9f)).rectTransform.Place(new Vector2(0, 0), new Vector2(1, 0), new Vector2(20, 10), new Vector2(-20, 26));
+            float r, g, b;
+            FestivalPresenter.ParseColor(f.color, out r, out g, out b);
+            UiKit.Box("Fill", track, new Color(r, g, b)).rectTransform.Place(Vector2.zero, new Vector2(FestivalPresenter.Progress(f), 1));
+
+            foreach (var t in f.tiers)
+            {
+                var reward = Texts.T("ui.gold") + " " + t.rewardGold + "  XP " + t.rewardXp + (t.rewardItemId != null ? "  + " + Texts.T(t.rewardItemId) : "");
+                var state = t.claimed ? "✓ " + Texts.T("ui.festival_claimed") : t.reached ? "<color=#2E8B3E>เมืองทำสำเร็จ!</color>" : "เป้า " + t.target + " ชิ้น";
+                var row = UiKit.Row(list, "ขั้น " + t.tier + " " + Texts.T("festival.tier." + t.tier) + "  <size=24>" + state + "</size>\n<size=24>" + reward + "</size>", 110);
+                var tier = t.tier;
+                var key = f.key;
+                if (t.claimable)
+                    UiKit.RowButton(row, Texts.T("ui.festival_claim"), UiKit.Good, () => _s.Run(async () =>
+                    {
+                        var res = await _s.Api.ClaimFestivalAsync(key, tier);
+                        Toast("ได้รับ " + Texts.T("ui.gold") + " " + res.rewards.gold + "  XP " + res.rewards.xp +
+                              (res.rewards.itemId != null ? "  และ " + Texts.T(res.rewards.itemId) : "") + (res.level.HasValue ? "  เลเวล " + res.level : ""));
+                        RefreshHud();
+                        ShowFestival();
+                    }), 170);
+            }
+
+            var me = f.me.points >= f.me.minToClaim
+                ? "คุณช่วยเมืองไปแล้ว <b>" + f.me.points + "</b> ชิ้น รับรางวัลทุกขั้นที่เมืองทำสำเร็จได้"
+                : "คุณช่วยไปแล้ว " + f.me.points + " ชิ้น ขายของเทศกาลให้ครบ " + f.me.minToClaim + " ชิ้นเพื่อรับรางวัลของเมือง";
+            UiKit.Row(list, "<size=26>" + me + "</size>", 80);
+
+            if (full && f.top.Count > 0)
+            {
+                UiKit.Row(list, "<b>ผู้ช่วยแห่งเมือง</b>", 60);
+                foreach (var h in f.top)
+                    UiKit.Row(list, "<size=26>" + h.rank + ". " + FestivalPresenter.HelperName(h) + " · " + h.points + " ชิ้น</size>", 60);
             }
         }
 
@@ -558,6 +654,8 @@ namespace HappyWorld.Unity.UI
                 var cost = p != null && p.avgUnitCost > 0 ? p.avgUnitCost : c.unitCost;
                 var margin = price - cost;
                 var code = c.productCode;
+                var hint = FestivalPresenter.ProductHint(_s.Festival != null ? _s.Festival.current : null, code);
+                if (hint.Length > 0) name += " <color=#D35400><size=22>" + hint + "</size></color>";
                 var row = UiKit.Row(list,
                     "<b>" + name + "</b>  ขาย " + price + " ทอง <size=22>(ราคาตลาด " + c.basePrice + " · ต้นทุน " + cost + " · " + (margin > 0 ? "กำไร " + margin : "<color=#C0392B>ขาดทุน " + (-margin) + "</color>") + "/ชิ้น)</size>\n" +
                     "<size=24>คลัง " + storage + "/" + b.stockCapacity + " · บนแผง " + shelf + "/" + st.shelfCapacity + (p != null && p.onStall ? "" : " · ยังไม่ได้วางขาย") + "</size>", 120);

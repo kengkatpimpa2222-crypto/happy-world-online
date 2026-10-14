@@ -26,6 +26,11 @@ export const envSchema = z.object({
   BUSINESS_SALE_COOLDOWN_SECONDS: z.coerce.number().int().min(0).default(30),
   /** How often open market stalls are settled in the background (NPC customers). 0 = only on demand. */
   LIVING_SHOP_SETTLE_INTERVAL_SECONDS: z.coerce.number().int().min(0).default(20),
+  /**
+   * Dev/QA only: shifts the festival calendar (hours) so a festival can be tried on any weekday.
+   * Must be 0 in production.
+   */
+  FESTIVAL_CLOCK_OFFSET_HOURS: z.coerce.number().min(-24 * 7 * 52).max(24 * 7 * 52).default(0),
 });
 
 export type Env = z.infer<typeof envSchema>;
@@ -42,6 +47,7 @@ export function validateEnv(raw: Record<string, unknown>): Env {
     if (/dev-only|test-only|change-me/i.test(env.JWT_ACCESS_SECRET)) {
       throw new Error('JWT_ACCESS_SECRET looks like a development placeholder');
     }
+    if (env.FESTIVAL_CLOCK_OFFSET_HOURS !== 0) throw new Error('FESTIVAL_CLOCK_OFFSET_HOURS must be 0 in production');
   }
   return env;
 }

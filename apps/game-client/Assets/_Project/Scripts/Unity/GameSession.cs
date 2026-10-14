@@ -48,6 +48,13 @@ namespace HappyWorld.Unity
         private float _marketRefreshAt = -1f;
         private bool _marketLoading;
         private const float MarketResyncSeconds = 30f;
+        // Phase 6: city festival
+        public FestivalState Festival { get; private set; }
+        private float _festivalFetchedAt;
+        private float _festivalRefreshAt = -1f;
+        private bool _festivalLoading;
+        private FestivalDecor _decor;
+        private const float FestivalResyncSeconds = 60f;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Boot()
@@ -241,6 +248,7 @@ namespace HappyWorld.Unity
             if (_local == null) SpawnLocalPlayer();
             _ui.ShowHud();
             await ConnectRealtimeAsync();
+            RefreshFestival();
             Run(ShowWelcomeBackReportAsync);
         }
 
@@ -301,7 +309,17 @@ namespace HappyWorld.Unity
             {
                 if (_market != null) _marketRefreshAt = Time.time + 0.8f; // batch several changes into one GET
             };
-            Rt.ShopUpdated += u => _ui.OnShopUpdated(u);
+            Rt.ShopUpdated += u =>
+            {
+                _ui.OnShopUpdated(u);
+                if (u.festivalPoints > 0) _festivalRefreshAt = Time.time + 2f; // my sales moved the city's progress
+            };
+            Rt.FestivalMilestone += m =>
+            {
+                if (_decor != null) _decor.Celebrate(m.tier);
+                _ui.Toast(FestivalPresenter.MilestoneText(m.tier), "ดูรางวัล", () => _ui.ShowFestival());
+                RefreshFestival();
+            };
             Rt.SessionReplaced += () =>
             {
                 _replaced = true;
@@ -371,6 +389,8 @@ namespace HappyWorld.Unity
                 _market = MarketView.Create(_zoneRoot);
                 RefreshMarket();
             }
+            _decor = FestivalDecor.Create(_zoneRoot, CurrentZone);
+            _decor.Apply(Festival != null ? Festival.current : null);
             _local.Width = CurrentZone.width;
             _local.Height = CurrentZone.height;
             _local.Teleport(s.you.x, s.you.y);
@@ -429,6 +449,45 @@ namespace HappyWorld.Unity
             });
         }
 
+        /// <summary>The server's clock (UTC), from the last GET /festival plus the time since.</summary>
+        public DateTime ServerNow => Festival != null
+            ? Festival.now.ToUniversalTime().AddSeconds(Time.realtimeSinceStartup - _festivalFetchedAt)
+            : DateTime.UtcNow;
+
+        /// <summary>Re-reads GET /festival: HUD banner, city decorations, shop hints.</summary>
+        public void RefreshFestival()
+        {
+            if (_festivalLoading || Api == null) return;
+            _festivalLoading = true;
+            _festivalRefreshAt = Time.time + FestivalResyncSeconds;
+            Run(async () =>
+            {
+                try
+                {
+                    OnFestival(await Api.GetFestivalAsync());
+                }
+                finally
+                {
+                    _festivalLoading = false;
+                }
+            });
+        }
+
+        /// <summary>Applies a fresh festival state (also called by the festival panel).</summary>
+        public void OnFestival(FestivalState st)
+        {
+            if (st == null || st.current == null) return;
+            Festival = st;
+            _festivalFetchedAt = Time.realtimeSinceStartup;
+            _ui.SetFestival(st);
+            if (_decor != null) _decor.Apply(st.current);
+            // refresh right when the festival starts or ends, so the city changes on time
+            var now = ServerNow;
+            var edge = st.current.status == "UPCOMING" ? st.current.startsAt : st.current.endsAt;
+            var untilEdge = (float)(edge.ToUniversalTime() - now).TotalSeconds + 2f;
+            if (untilEdge > 0 && untilEdge < FestivalResyncSeconds) _festivalRefreshAt = Time.time + untilEdge;
+        }
+
         /// <summary>Called after the local player blocks someone: they disappear at once.</summary>
         public void HidePlayer(string userId) => City.Hide(userId);
 
@@ -440,6 +499,9 @@ namespace HappyWorld.Unity
             _local = null;
             _localView = null;
             Rt = null;
+            Festival = null;
+            _festivalRefreshAt = -1f;
+            _decor = null;
         }
 
         public string PresetText(string id)
@@ -475,6 +537,7 @@ namespace HappyWorld.Unity
             }
 
             if (_market != null && _marketRefreshAt > 0 && Time.time >= _marketRefreshAt) RefreshMarket();
+            if (_festivalRefreshAt > 0 && Time.time >= _festivalRefreshAt) RefreshFestival();
 
             if (_local == null || CurrentZone == null || !Rt.Connected) return;
             _local.InputEnabled = !_ui.ModalOpen;

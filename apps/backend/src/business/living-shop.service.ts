@@ -16,6 +16,7 @@ import {
 import { AppException } from '../common/app-exception';
 import { AuthUser } from '../common/decorators';
 import { AuditService } from '../audit/audit.service';
+import { FestivalContributionResult, FestivalService } from '../festival/festival.service';
 import { isDisplayNameAllowed } from '../player/name-filter';
 import { PrismaService, Tx } from '../prisma/prisma.service';
 import { QuestsService } from '../quests/quests.service';
@@ -44,6 +45,8 @@ export interface SettleResult {
   /** stall after the customers (for the owner's live HUD) */
   stall: StallLine[];
   cashBox: number;
+  /** Phase 6: featured units that counted toward the city festival */
+  festival: FestivalContributionResult;
 }
 
 interface LockedRow {
@@ -83,6 +86,7 @@ export class LivingShopService {
     private readonly realtime: RealtimeService,
     private readonly graph: SocialGraphService,
     private readonly audit: AuditService,
+    private readonly festival: FestivalService,
   ) {}
 
   nowTick(at = Date.now()): number {
@@ -129,7 +133,7 @@ export class LivingShopService {
       avgUnitCost: l.avgUnitCost,
       sellPrice: l.sellPrice,
     }));
-    const sim = simulateCustomers(shop.id, shop.level, from, nowTick, stallIn);
+    const sim = simulateCustomers(shop.id, shop.level, from, nowTick, stallIn, this.festival.festivalAtTick);
 
     for (const [i, after] of sim.stall.entries()) {
       const sold = stallIn[i]!.shelfQuantity - after.shelfQuantity;
@@ -173,8 +177,9 @@ export class LivingShopService {
     await this.quests.recordEvent(tx, shop.userId, 'BUSINESS_SELL_UNITS', t.unitsSold);
     if (t.profit > 0) await this.quests.recordEvent(tx, shop.userId, 'BUSINESS_EARN_PROFIT', t.profit);
     await this.quests.recordEvent(tx, shop.userId, 'SHOP_SERVE_CUSTOMERS', t.buyers);
+    const festival = await this.festival.recordSales(tx, shop.userId, sim.festivalPoints);
 
-    return { shop, toTick: nowTick, sim, stall: sim.stall, cashBox: shop.cashBox + t.revenue };
+    return { shop, toTick: nowTick, sim, stall: sim.stall, cashBox: shop.cashBox + t.revenue, festival };
   }
 
   /** Lazy settle of the player's own open shop(s) before showing them. */
@@ -219,6 +224,7 @@ export class LivingShopService {
   /** Live updates after a settle: the owner's HUD, and the customers' walk for players in the market. */
   publish(res: SettleResult): void {
     const { shop, sim } = res;
+    this.festival.publishMilestones(res.festival.milestones);
     if (sim.totals.customers === 0) return;
     this.realtime.notifyUser(shop.userId, WsEvent.SHOP_UPDATED, {
       businessId: shop.id,
@@ -228,6 +234,7 @@ export class LivingShopService {
       unitsSold: sim.totals.unitsSold,
       revenue: sim.totals.revenue,
       stall: res.stall.map((l) => ({ productCode: l.productCode, shelfQuantity: l.shelfQuantity })),
+      festivalPoints: Object.values(res.festival.added).reduce((a, b) => a + b, 0),
     });
     if (shop.stallSlot === null || !shop.marketAgeBand) return;
     // Only the latest tick is animated; older ticks were "while nobody was watching".

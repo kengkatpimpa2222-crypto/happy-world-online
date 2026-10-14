@@ -141,6 +141,7 @@ namespace HappyWorld.Core.World
             switch (v.outcome)
             {
                 case "BOUGHT":
+                    if (v.customerType == "FESTIVAL_GOER") return "งานเทศกาลต้องมี" + name + "! " + v.quantity + " " + ProductUnit(v.productCode);
                     return "ขอ" + name + " " + v.quantity + " " + ProductUnit(v.productCode) + "!";
                 case "TOO_EXPENSIVE":
                     return price > 0 ? name + " " + price + " ทอง แพงไปหน่อย..." : "แพงไปหน่อย...";
@@ -187,6 +188,7 @@ namespace HappyWorld.Core.World
                 case "WORKER": return "พนักงาน";
                 case "TOURIST": return "นักท่องเที่ยว";
                 case "GRANDMA": return "คุณยาย";
+                case "FESTIVAL_GOER": return "นักเที่ยวงาน";
                 default: return "ลูกค้า";
             }
         }

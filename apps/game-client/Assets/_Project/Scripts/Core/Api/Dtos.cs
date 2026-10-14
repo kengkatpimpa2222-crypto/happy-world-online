@@ -258,6 +258,111 @@ namespace HappyWorld.Core.Api
         public List<ShopTip> tips = new List<ShopTip>();
     }
 
+    // ---------- Phase 6: city festival ----------
+
+    public sealed class FestivalFeatured
+    {
+        public string productCode;
+        /// <summary>how many times more customers want it during the festival</summary>
+        public int demand;
+    }
+
+    public sealed class FestivalCity
+    {
+        public int points;
+        public int contributors;
+        public int tiersReached;
+    }
+
+    public sealed class FestivalTier
+    {
+        public int tier;
+        public int target;
+        public bool reached;
+        public int rewardGold;
+        public int rewardXp;
+        public string rewardItemId;
+        public bool claimed;
+        public bool claimable;
+    }
+
+    public sealed class FestivalMe
+    {
+        public int points;
+        public int minToClaim;
+    }
+
+    public sealed class FestivalHelper
+    {
+        public int rank;
+        /// <summary>null for other players when the viewer is under 13 (child safety)</summary>
+        public string displayName;
+        public int points;
+        public bool isMe;
+    }
+
+    public sealed class FestivalInfo
+    {
+        public string key;
+        public string code;
+        public string nameKey;
+        public string nameTh;
+        /// <summary>#RRGGBB decoration colour</summary>
+        public string color;
+        /// <summary>UPCOMING, ACTIVE or ENDED</summary>
+        public string status;
+        public DateTime startsAt;
+        public DateTime endsAt;
+        public List<FestivalFeatured> featured = new List<FestivalFeatured>();
+        public string rewardItemId;
+        public FestivalCity city = new FestivalCity();
+        public List<FestivalTier> tiers = new List<FestivalTier>();
+        public FestivalMe me = new FestivalMe();
+        public List<FestivalHelper> top = new List<FestivalHelper>();
+
+        public bool Active => status == "ACTIVE";
+
+        /// <summary>Demand multiplier of a product in this festival (1 = not featured).</summary>
+        public int DemandOf(string productCode)
+        {
+            foreach (var f in featured) if (f.productCode == productCode) return f.demand;
+            return 1;
+        }
+
+        public int ClaimableCount()
+        {
+            int n = 0;
+            foreach (var t in tiers) if (t.claimable) n++;
+            return n;
+        }
+
+        /// <summary>The next tier the city is working toward, or null when all are reached.</summary>
+        public FestivalTier NextTier()
+        {
+            foreach (var t in tiers) if (!t.reached) return t;
+            return null;
+        }
+    }
+
+    /// <summary>GET /festival</summary>
+    public sealed class FestivalState
+    {
+        public DateTime now;
+        public FestivalInfo current;
+        /// <summary>last week's festival, only while it still has rewards for this player</summary>
+        public FestivalInfo previous;
+    }
+
+    /// <summary>POST /festival/claim</summary>
+    public sealed class FestivalClaimResult
+    {
+        public string festivalKey;
+        public int tier;
+        public QuestRewards rewards;
+        public int? level;
+        public Dictionary<string, int> wallet = new Dictionary<string, int>();
+    }
+
     public sealed class MarketStallProduct
     {
         public string productCode;

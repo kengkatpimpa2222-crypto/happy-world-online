@@ -52,6 +52,11 @@ namespace HappyWorld.Core.Localization
             ["SHOP_NOT_ENOUGH_STOCK"] = "ของในคลังไม่พอ ซื้อสินค้าเข้าร้านก่อน",
             ["SHOP_SHELF_EMPTY"] = "ยังไม่มีของบนแผง วางสินค้าขึ้นแผงก่อนเปิดร้าน",
             ["SHOP_NOTHING_TO_COLLECT"] = "ลิ้นชักยังว่างอยู่",
+            ["FESTIVAL_NOT_FOUND"] = "ไม่พบเทศกาลนี้",
+            ["FESTIVAL_CLAIM_EXPIRED"] = "หมดเวลารับรางวัลของเทศกาลนี้แล้ว",
+            ["FESTIVAL_TIER_NOT_REACHED"] = "เมืองยังไปไม่ถึงขั้นนี้ ช่วยกันขายของเทศกาลอีกนิด",
+            ["FESTIVAL_NOT_ENOUGH_CONTRIBUTION"] = "ขายของเทศกาลให้ครบ 10 ชิ้นก่อน ถึงจะรับรางวัลของเมืองได้",
+            ["FESTIVAL_ALREADY_CLAIMED"] = "รับรางวัลขั้นนี้ไปแล้ว",
             ["error.generic"] = "เกิดข้อผิดพลาด ลองใหม่อีกครั้ง",
 
             // UI
@@ -99,6 +104,19 @@ namespace HappyWorld.Core.Localization
             ["ui.session_replaced"] = "บัญชีนี้เข้าเล่นจากอุปกรณ์อื่น",
             ["ui.reconnect"] = "เชื่อมต่อใหม่",
             ["ui.go_market"] = "ไปตลาด",
+            ["ui.festival"] = "เทศกาล",
+            ["ui.festival_claim"] = "รับรางวัล",
+            ["ui.festival_claimed"] = "รับแล้ว",
+
+            // city festivals (packages/shared-contracts/src/festival.ts)
+            ["festival.cool_summer"] = "เทศกาลคลายร้อน",
+            ["festival.bakery"] = "งานขนมอบหอมกรุ่น",
+            ["festival.flower"] = "เทศกาลดอกไม้บาน",
+            ["festival.street_food"] = "ถนนคนเดินของกินเล่น",
+            ["festival.lantern"] = "คืนโคมไฟ",
+            ["festival.tier.1"] = "ประดับธงทั้งเมือง",
+            ["festival.tier.2"] = "โคมไฟส่องสว่าง",
+            ["festival.tier.3"] = "พลุเต็มฟ้า",
 
             // items and quests by id (apps/backend/src/database/seed-data.ts)
             ["outfit_basic_tee"] = "เสื้อยืดพื้นฐาน",
@@ -117,6 +135,11 @@ namespace HappyWorld.Core.Localization
             ["acc_rainbow_wings"] = "ปีกสายรุ้ง",
             ["furn_sofa_cloud"] = "โซฟาก้อนเมฆ",
             ["theme_songkran"] = "ธีมสงกรานต์",
+            ["furn_fest_beach_umbrella"] = "ร่มชายหาดคลายร้อน",
+            ["furn_fest_bread_oven"] = "เตาอบขนมปังจิ๋ว",
+            ["furn_fest_flower_arch"] = "ซุ้มดอกไม้",
+            ["furn_fest_food_cart"] = "รถเข็นของกินเล่น",
+            ["furn_fest_lantern"] = "โคมไฟเทศกาล",
             ["newbie_set_profile"] = "ตั้งชื่อและแต่งตัวละคร",
             ["newbie_first_purchase"] = "ซื้อของชิ้นแรก",
             ["newbie_open_shop"] = "เปิดร้านครั้งแรก",
@@ -128,6 +151,7 @@ namespace HappyWorld.Core.Localization
             ["life_budget_buyer"] = "นักช้อปรู้คุณค่า",
             ["shop_open_stall"] = "เปิดแผงในตลาดครั้งแรก",
             ["shop_serve_customers"] = "ขายให้ลูกค้า 15 คน",
+            ["festival_first_help"] = "ช่วยเมืองจัดเทศกาล",
 
             // zones (nameKey from GET /city)
             ["zone.plaza"] = "ลานกลางเมือง",

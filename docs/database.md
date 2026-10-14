@@ -47,6 +47,15 @@ Schema: [`apps/backend/prisma/schema.prisma`](../apps/backend/prisma/schema.pris
 - **Partial unique index `businesses_one_shop_per_stall`** `(market_age_band, stall_slot) WHERE stall_slot IS NOT NULL` อยู่ใน migration SQL เท่านั้น ตรวจแล้วว่า `prisma migrate diff` ไม่สร้างคำสั่งลบ ถ้า migration ใหม่มี `DROP INDEX "businesses_one_shop_per_stall"` ให้ลบบรรทัดนั้นออก
 - เงินจากลูกค้า NPC เข้า `cash_box` ก่อน (ไม่ใช่ wallet) จึงไม่มีแถว ledger จนกว่าผู้เล่นกด "เก็บเงิน" ซึ่งเขียน `wallet_transactions` ประเภท `BUSINESS_SALE`, `reference_type = 'shop-collect'`
 
+## Migration ของ Phase 6 (`*_phase6_city_festival`)
+
+- เพิ่มอย่างเดียว: enum `WalletTransactionType.FESTIVAL_REWARD`, `QuestObjectiveType.FESTIVAL_CONTRIBUTE`
+- `festival_city_progress` (PK `festival_key, age_band`): แต้มรวมและจำนวนผู้ช่วยของแต่ละเมือง (แยกช่วงอายุ)
+- `festival_contributions` (PK `festival_key, user_id`): แต้มของผู้เล่นแต่ละคน บวกใน transaction เดียวกับการคิดบัญชีร้าน (lock แผงก่อน แล้วค่อยแถวของเมือง ลำดับเดียวกันเสมอ จึงไม่ deadlock)
+- `festival_reward_claims` (PK `festival_key, user_id, tier`): กันรับรางวัลซ้ำ เงินรางวัลเขียน `wallet_transactions` ประเภท `FESTIVAL_REWARD`, `reference_type = 'festival'`, `reference_id = '<key>:<tier>'`
+- CHECK: แต้มไม่ติดลบ, `tier` 1-3
+- ไม่มีตารางปฏิทิน: เทศกาลของแต่ละสัปดาห์คำนวณจากเวลา `festival_key` เช่น `BAKERY-41` = งานขนมอบ สัปดาห์ที่ 41 นับจาก 5 ม.ค. 2026
+
 ## ข้อควรรู้
 
 - `wallet_transactions` ลบไม่ได้โดยออกแบบ การลบบัญชีผู้เล่น (สิทธิ์ตาม PDPA) ให้ทำแบบ anonymize/soft delete (`users.status = DELETED`, ล้างอีเมลและชื่อ) แทนการ hard delete

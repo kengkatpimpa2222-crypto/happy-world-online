@@ -71,7 +71,7 @@ namespace HappyWorld.Core.Realtime
     public sealed class MarketVisit
     {
         public int index;
-        public string customerType;  // STUDENT | WORKER | TOURIST | GRANDMA
+        public string customerType;  // STUDENT | WORKER | TOURIST | GRANDMA | FESTIVAL_GOER
         public string productCode;
         public string outcome;       // BOUGHT | TOO_EXPENSIVE | SOLD_OUT | NOT_SELLING
         public int quantity;
@@ -103,6 +103,17 @@ namespace HappyWorld.Core.Realtime
         public int unitsSold;
         public int revenue;
         public List<ShopStallLine> stall = new List<ShopStallLine>();
+        /// <summary>Phase 6: featured units in this update that counted for the city festival.</summary>
+        public int festivalPoints;
+    }
+
+    /// <summary>festival:milestone — the whole city (same age band) reached a festival tier.</summary>
+    public sealed class FestivalMilestone
+    {
+        public string festivalKey;
+        public string code;
+        public int tier;
+        public int points;
     }
 
     /// <summary>
@@ -131,6 +142,7 @@ namespace HappyWorld.Core.Realtime
         public event Action<MarketActivity> MarketActivity;
         public event Action<int> MarketStallChanged;     // slot
         public event Action<ShopUpdated> ShopUpdated;
+        public event Action<FestivalMilestone> FestivalMilestone;
         public event Action<string> ConnectError;
         public event Action<string> Disconnected;
 
@@ -157,6 +169,7 @@ namespace HappyWorld.Core.Realtime
             _io.On("market:activity", p => MarketActivity?.Invoke(p.ToObject<MarketActivity>()));
             _io.On("market:stall", p => MarketStallChanged?.Invoke((int?)p?["slot"] ?? -1));
             _io.On("shop:updated", p => ShopUpdated?.Invoke(p.ToObject<ShopUpdated>()));
+            _io.On("festival:milestone", p => FestivalMilestone?.Invoke(p.ToObject<FestivalMilestone>()));
         }
 
         /// <summary>Opens the socket. Completion means the TCP/WebSocket is open; wait for <see cref="Ready"/> before joining a zone.</summary>

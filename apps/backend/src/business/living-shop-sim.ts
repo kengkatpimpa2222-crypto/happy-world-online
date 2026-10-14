@@ -3,10 +3,14 @@ import {
   BUSINESS_PRODUCTS,
   BusinessProductCode,
   businessLevelConfig,
+  FESTIVAL_CUSTOMER_RATE,
+  festivalDemand,
+  FestivalWeek,
   NPC_BARGAIN_PRICE_RATIO,
   NPC_CUSTOMER_TYPE_CODES,
   NPC_CUSTOMER_TYPES,
   NPC_WANTS_UNLISTED_CHANCE,
+  NpcCustomerType,
   NpcCustomerTypeCode,
   NpcVisitOutcome,
 } from '@hwo/shared-contracts';
@@ -60,7 +64,12 @@ export interface SimulationResult {
   stall: StallLine[];
   totals: VisitTotals;
   perProduct: Partial<Record<BusinessProductCode, ProductTotals>>;
+  /** festival key -> featured units sold during that festival (Phase 6 city goal) */
+  festivalPoints: Record<string, number>;
 }
+
+/** Which festival (if any) is running in a given tick. */
+export type FestivalAt = (tick: number) => FestivalWeek | null;
 
 // ---------- deterministic randomness ----------
 
@@ -89,11 +98,15 @@ export function seededRandom(seed: string): () => number {
 function pickWeighted<T>(rng: () => number, items: readonly T[], weight: (t: T) => number): T {
   const total = items.reduce((a, t) => a + weight(t), 0);
   let r = rng() * total;
+  let last: T = items[items.length - 1]!;
   for (const t of items) {
-    r -= weight(t);
+    const w = weight(t);
+    if (w <= 0) continue;
+    last = t;
+    r -= w;
     if (r < 0) return t;
   }
-  return items[items.length - 1]!;
+  return last;
 }
 
 /** Customers arriving in one tick: binomial with mean `rate`, so the stream feels lively but fair. */
@@ -119,25 +132,40 @@ const emptyProduct = (): ProductTotals => ({ unitsSold: 0, revenue: 0, costOfGoo
  * popularity); sometimes a product the stall does not list. They buy 1-3 units if the price is within
  * their budget (one extra unit when it is a bargain), otherwise they leave and the reason is counted
  * so the end-of-day report can teach cause and effect.
+ *
+ * During a city festival (`festivalAt`) the market is busier, festival-goers come to town and
+ * everyone craves the festival's goods; featured units sold are counted per festival.
  */
-export function simulateCustomers(seed: string, level: number, fromTick: number, toTick: number, stallIn: readonly StallLine[]): SimulationResult {
+export function simulateCustomers(
+  seed: string,
+  level: number,
+  fromTick: number,
+  toTick: number,
+  stallIn: readonly StallLine[],
+  festivalAt: FestivalAt = () => null,
+): SimulationResult {
   const stall = stallIn.map((l) => ({ ...l }));
   const visits: CustomerVisit[] = [];
   const totals: VisitTotals = { customers: 0, buyers: 0, unitsSold: 0, revenue: 0, costOfGoods: 0, profit: 0, lostTooExpensive: 0, lostSoldOut: 0, lostNotSelling: 0 };
   const perProduct: Partial<Record<BusinessProductCode, ProductTotals>> = {};
-  if (stall.length === 0 || toTick <= fromTick) return { visits, stall, totals, perProduct };
+  const festivalPoints: Record<string, number> = {};
+  if (stall.length === 0 || toTick <= fromTick) return { visits, stall, totals, perProduct, festivalPoints };
 
   const { customersPerMinute } = businessLevelConfig(level);
   const unlisted = BUSINESS_PRODUCT_CODES.filter((c) => BUSINESS_PRODUCTS[c].unlockLevel <= level && !stall.some((l) => l.productCode === c));
 
   for (let tick = fromTick + 1; tick <= toTick; tick++) {
     const rng = seededRandom(`${seed}:${tick}`);
-    const count = arrivals(rng, customersPerMinute);
+    const fest = festivalAt(tick);
+    const count = arrivals(rng, customersPerMinute * (fest ? FESTIVAL_CUSTOMER_RATE : 1));
     for (let index = 0; index < count; index++) {
-      const typeCode = pickWeighted(rng, NPC_CUSTOMER_TYPE_CODES, (c) => NPC_CUSTOMER_TYPES[c].weight);
+      const typeCode = pickWeighted(rng, NPC_CUSTOMER_TYPE_CODES, (c) => {
+        const t = NPC_CUSTOMER_TYPES[c] as NpcCustomerType;
+        return fest ? (t.festivalWeight ?? t.weight) : t.weight;
+      });
       const type = NPC_CUSTOMER_TYPES[typeCode];
       const likes = type.likes as Partial<Record<BusinessProductCode, number>>;
-      const like = (c: BusinessProductCode) => (likes[c] ?? 1) * BUSINESS_PRODUCTS[c].baseDemand;
+      const like = (c: BusinessProductCode) => (likes[c] ?? 1) * BUSINESS_PRODUCTS[c].baseDemand * festivalDemand(fest?.festival, c);
       // Always draw the same number of random values per customer so one customer's choice
       // never shifts the next customer's dice.
       const wantsUnlisted = rng() < NPC_WANTS_UNLISTED_CHANCE;
@@ -185,12 +213,15 @@ export function simulateCustomers(seed: string, level: number, fromTick: number,
         p.unitsSold += qty;
         p.revenue += revenue;
         p.costOfGoods += cost;
+        if (fest && festivalDemand(fest.festival, line.productCode) > 1) {
+          festivalPoints[fest.key] = (festivalPoints[fest.key] ?? 0) + qty;
+        }
       }
       visits.push(visit);
     }
   }
   totals.profit = totals.revenue - totals.costOfGoods;
-  return { visits, stall, totals, perProduct };
+  return { visits, stall, totals, perProduct, festivalPoints };
 }
 
 // ---------- end-of-day advice ----------
