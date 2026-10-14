@@ -7,12 +7,14 @@ import { BusinessController } from './business.controller';
 import { BusinessService } from './business.service';
 import { LivingShopService } from './living-shop.service';
 import { MarketController } from './market.controller';
+import { MinigameController } from './minigame.controller';
+import { MinigameService } from './minigame.service';
 import { ShopSettlerService } from './shop-settler.service';
 
 @Module({
   imports: [QuestsModule, RealtimeModule, FestivalModule, CityLifeModule],
-  controllers: [BusinessController, MarketController],
-  providers: [BusinessService, LivingShopService, ShopSettlerService],
+  controllers: [BusinessController, MarketController, MinigameController],
+  providers: [BusinessService, LivingShopService, ShopSettlerService, MinigameService],
   exports: [LivingShopService, ShopSettlerService],
 })
 export class BusinessModule {}

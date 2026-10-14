@@ -627,6 +627,56 @@ namespace HappyWorld.Core.Api
         public int total;
     }
 
+    /// <summary>POST /minigames/start — one round; the seed builds the round's layout on the client.</summary>
+    public sealed class MinigameRound
+    {
+        public string sessionId;
+        public string game;
+        public string productCode;
+        public int seed;
+        public int durationSeconds;
+        public List<int> starScores = new List<int>();
+        public List<int> unitsByStars = new List<int>();
+        public int rewardedPlaysLeft;
+    }
+
+    /// <summary>POST /minigames/:id/finish — stars and goods as the server decided them.</summary>
+    public sealed class MinigameResult
+    {
+        public string sessionId;
+        public string game;
+        public string productCode;
+        public int score;
+        public int stars;
+        public bool rewarded;
+        public int unitsAwarded;
+        public int xpAwarded;
+        public bool replayed;
+        public bool stockFull;
+        public int? level;
+        public int best;
+        public int rewardedPlaysLeft;
+        public Business business;
+    }
+
+    public sealed class MinigameOverview
+    {
+        public int dailyRewardedPlays;
+        public int rewardedPlaysLeft;
+        public DateTime resetsAt;
+        public List<int> unitsByStars = new List<int>();
+        public List<MinigameInfo> games = new List<MinigameInfo>();
+    }
+
+    public sealed class MinigameInfo
+    {
+        public string game;
+        public int durationSeconds;
+        public List<int> starScores = new List<int>();
+        public List<string> products = new List<string>();
+        public int best;
+    }
+
     /// <summary>GET /city/growth — the city's public projects.</summary>
     public sealed class CityGrowth
     {

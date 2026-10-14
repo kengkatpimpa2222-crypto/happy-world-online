@@ -1,15 +1,20 @@
 using HappyWorld.Core.Api;
 using Avatar = HappyWorld.Core.Api.Avatar; // UnityEngine also has an Avatar type
+using HappyWorld.Unity.Art;
 using Newtonsoft.Json.Linq;
 using UnityEngine;
 
 namespace HappyWorld.Unity.World
 {
-    /// <summary>A simple primitive avatar: body (skin colour), shirt (outfit), hair, nameplate and chat bubble.</summary>
+    /// <summary>
+    /// A player: the Kenney character dressed in the avatar's colours (<see cref="CharacterRig"/>), nameplate and
+    /// chat bubble. Falls back to the original primitive figure if the model can't load.
+    /// </summary>
     public sealed class AvatarView : MonoBehaviour
     {
         public string UserId;
         private Renderer _body, _shirt, _hair, _hat;
+        private CharacterRig _rig;
         private TextMesh _name, _bubble;
         private float _bubbleUntil;
 
@@ -19,13 +24,15 @@ namespace HappyWorld.Unity.World
             root.transform.SetParent(parent, false);
             var v = root.AddComponent<AvatarView>();
             v.UserId = userId;
-            v._body = CityBuilder.Prim(PrimitiveType.Capsule, root.transform, new Vector3(0, 1f, 0), new Vector3(0.8f, 0.5f, 0.8f), Color.white, "Legs").GetComponent<Renderer>();
-            v._shirt = CityBuilder.Prim(PrimitiveType.Cube, root.transform, new Vector3(0, 1.15f, 0), new Vector3(0.75f, 0.6f, 0.5f), Color.white, "Shirt").GetComponent<Renderer>();
-            var head = CityBuilder.Prim(PrimitiveType.Sphere, root.transform, new Vector3(0, 1.75f, 0), new Vector3(0.6f, 0.6f, 0.6f), Color.white, "Head");
-            v._hair = CityBuilder.Prim(PrimitiveType.Sphere, root.transform, new Vector3(0, 1.9f, -0.05f), new Vector3(0.64f, 0.4f, 0.64f), Color.black, "Hair").GetComponent<Renderer>();
-            v._hat = CityBuilder.Prim(PrimitiveType.Cylinder, root.transform, new Vector3(0, 2.1f, 0), new Vector3(0.8f, 0.04f, 0.8f), Color.yellow, "Hat").GetComponent<Renderer>();
-            CityBuilder.Prim(PrimitiveType.Cube, root.transform, new Vector3(0, 1.75f, 0.3f), new Vector3(0.3f, 0.08f, 0.05f), Color.black, "Face");
-            head.GetComponent<Renderer>().sharedMaterial = CityBuilder.Mat(new Color(1f, 0.85f, 0.7f));
+            v._rig = CharacterRig.Create(root.transform);
+            if (v._rig != null)
+            {
+                v._hat = CityBuilder.Prim(PrimitiveType.Cylinder, v._rig.Torso != null ? v._rig.Torso : root.transform, Vector3.zero, Vector3.one, Color.yellow, "Hat").GetComponent<Renderer>();
+                var ht = v._hat.transform;
+                ht.localPosition = v._rig.HatLocalPos + Vector3.down * 0.08f; // brim around the antenna
+                ht.localScale = new Vector3(0.75f, 0.02f, 0.75f);
+            }
+            else BuildPrimitives(v, root);
             // one generous capsule on the root instead of the primitives' own colliders
             foreach (var c in root.GetComponentsInChildren<Collider>()) Object.Destroy(c);
             var col = root.AddComponent<CapsuleCollider>();
@@ -33,10 +40,21 @@ namespace HappyWorld.Unity.World
             col.height = 2.2f;
             col.radius = 0.5f;
             col.isTrigger = true; // tappable, but nobody gets stuck walking into another player
-            v._name = CityBuilder.Label(root.transform, new Vector3(0, 2.5f, 0), "", 0.12f, Color.white);
-            v._bubble = CityBuilder.Label(root.transform, new Vector3(0, 3.0f, 0), "", 0.14f, new Color(1f, 1f, 0.6f));
+            v._name = CityBuilder.Label(root.transform, new Vector3(0, 2.6f, 0), "", 0.12f, Color.white);
+            v._bubble = CityBuilder.Label(root.transform, new Vector3(0, 3.1f, 0), "", 0.14f, new Color(1f, 1f, 0.6f));
             v.SetName(displayName, level, false);
             return v;
+        }
+
+        private static void BuildPrimitives(AvatarView v, GameObject root)
+        {
+            v._body = CityBuilder.Prim(PrimitiveType.Capsule, root.transform, new Vector3(0, 1f, 0), new Vector3(0.8f, 0.5f, 0.8f), Color.white, "Legs").GetComponent<Renderer>();
+            v._shirt = CityBuilder.Prim(PrimitiveType.Cube, root.transform, new Vector3(0, 1.15f, 0), new Vector3(0.75f, 0.6f, 0.5f), Color.white, "Shirt").GetComponent<Renderer>();
+            var head = CityBuilder.Prim(PrimitiveType.Sphere, root.transform, new Vector3(0, 1.75f, 0), new Vector3(0.6f, 0.6f, 0.6f), Color.white, "Head");
+            v._hair = CityBuilder.Prim(PrimitiveType.Sphere, root.transform, new Vector3(0, 1.9f, -0.05f), new Vector3(0.64f, 0.4f, 0.64f), Color.black, "Hair").GetComponent<Renderer>();
+            v._hat = CityBuilder.Prim(PrimitiveType.Cylinder, root.transform, new Vector3(0, 2.1f, 0), new Vector3(0.8f, 0.04f, 0.8f), Color.yellow, "Hat").GetComponent<Renderer>();
+            CityBuilder.Prim(PrimitiveType.Cube, root.transform, new Vector3(0, 1.75f, 0.3f), new Vector3(0.3f, 0.08f, 0.05f), Color.black, "Face");
+            head.GetComponent<Renderer>().sharedMaterial = CityBuilder.Mat(new Color(1f, 0.85f, 0.7f));
         }
 
         public void SetName(string displayName, int level, bool isFriend)
@@ -56,6 +74,13 @@ namespace HappyWorld.Unity.World
         {
             Color body;
             if (string.IsNullOrEmpty(bodyColor) || !ColorUtility.TryParseHtmlString(bodyColor, out body)) body = new Color(0.4f, 0.6f, 1f);
+            if (_rig != null)
+            {
+                _rig.Dress(body, ItemColor(outfit, body), ItemColor(hair, new Color(0.3f, 0.2f, 0.1f)));
+                _hat.gameObject.SetActive(accessory == "acc_straw_hat");
+                _hat.sharedMaterial = CityBuilder.Mat(new Color(0.95f, 0.85f, 0.5f));
+                return;
+            }
             _body.sharedMaterial = CityBuilder.Mat(body);
             _shirt.sharedMaterial = CityBuilder.Mat(ItemColor(outfit, body * 0.8f));
             _hair.sharedMaterial = CityBuilder.Mat(ItemColor(hair, new Color(0.3f, 0.2f, 0.1f)));

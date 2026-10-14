@@ -27,3 +27,4 @@ apps/game-client/*.sln
 apps/game-client/.utmp/
 apps/game-client/*.slnx
 dump.rdb
+__pycache__/

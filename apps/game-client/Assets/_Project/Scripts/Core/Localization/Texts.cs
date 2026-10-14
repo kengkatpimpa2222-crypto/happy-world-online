@@ -108,6 +108,10 @@ namespace HappyWorld.Core.Localization
             ["ui.festival_claim"] = "รับรางวัล",
             ["ui.festival_claimed"] = "รับแล้ว",
             ["ui.city"] = "เมืองของเรา",
+            ["ui.make"] = "ทำเอง",
+            ["MINIGAME_TOO_EARLY"] = "รอบนี้ยังไม่จบ เล่นต่อให้ครบเวลาก่อนนะ",
+            ["MINIGAME_EXPIRED"] = "รอบนี้ค้างไว้นานเกินไป ลองเล่นรอบใหม่ได้เลย",
+            ["MINIGAME_SCORE_INVALID"] = "คะแนนรอบนี้ไม่ถูกต้อง ลองเล่นใหม่อีกครั้ง",
             // city projects (packages/shared-contracts/src/city-growth.ts)
             ["project.park"] = "สวนสาธารณะ",
             ["project.bus_stop"] = "ป้ายรถเมล์หน้าตลาด",
@@ -161,6 +165,7 @@ namespace HappyWorld.Core.Localization
             ["shop_open_stall"] = "เปิดแผงในตลาดครั้งแรก",
             ["shop_serve_customers"] = "ขายให้ลูกค้า 15 คน",
             ["festival_first_help"] = "ช่วยเมืองจัดเทศกาล",
+            ["life_homemade_goods"] = "ทำของขายเอง 3 รอบ",
 
             // zones (nameKey from GET /city)
             ["zone.plaza"] = "ลานกลางเมือง",

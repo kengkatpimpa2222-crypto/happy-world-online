@@ -147,5 +147,13 @@ export const claimFestivalSchema = z.object({
 });
 export type ClaimFestivalRequest = z.infer<typeof claimFestivalSchema>;
 
+export const startMinigameSchema = z
+  .object({ businessId: z.uuid(), productCode: businessProductCodeSchema })
+  .strict();
+export type StartMinigameRequest = z.infer<typeof startMinigameSchema>;
+
+export const finishMinigameSchema = z.object({ score: z.number().int().min(0).max(100_000) }).strict();
+export type FinishMinigameRequest = z.infer<typeof finishMinigameSchema>;
+
 export const uuidParamSchema = z.uuid();
 export const questIdParamSchema = z.string().regex(/^[a-z0-9_]{2,64}$/);

@@ -164,6 +164,14 @@ namespace HappyWorld.Core.Api
         public Task<CityNow> GetCityNowAsync() => SendAsync<CityNow>("GET", "/city/now");
         public Task<CityGrowth> GetCityGrowthAsync() => SendAsync<CityGrowth>("GET", "/city/growth");
 
+        // ---------- Mini-games: make goods by hand ----------
+        public Task<MinigameOverview> GetMinigamesAsync() => SendAsync<MinigameOverview>("GET", "/minigames");
+        public Task<MinigameRound> StartMinigameAsync(string businessId, string productCode) =>
+            SendAsync<MinigameRound>("POST", "/minigames/start", new { businessId, productCode });
+        /// <summary>Safe to retry: the round id makes it idempotent (the server returns the first result).</summary>
+        public Task<MinigameResult> FinishMinigameAsync(string sessionId, int score) =>
+            SendAsync<MinigameResult>("POST", "/minigames/" + sessionId + "/finish", new { score });
+
         // ---------- Friends / safety ----------
         public Task<FriendRequestResult> SendFriendRequestByCodeAsync(string friendCode) =>
             SendAsync<FriendRequestResult>("POST", "/friends/requests", new { friendCode = friendCode.Trim().ToUpperInvariant() });
