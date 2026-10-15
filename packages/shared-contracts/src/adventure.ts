@@ -94,6 +94,12 @@ export interface ExpeditionSiteDef {
   events: Record<string, ExpeditionEventDef>;
   explorerXp: number;
   playerXp: number;
+  /**
+   * New-player safety net (Phase 9.1): the first trip a player brings home from this site always carries
+   * at least one full set of this recipe's inputs. Only what is missing is topped up, nothing is added on
+   * top, and later trips roll exactly as before.
+   */
+  firstVisitRecipe: RecipeCode;
 }
 
 export const EXPEDITION_SITES: Record<ExpeditionSite, ExpeditionSiteDef> = {
@@ -110,6 +116,7 @@ export const EXPEDITION_SITES: Record<ExpeditionSite, ExpeditionSiteDef> = {
     },
     explorerXp: 10,
     playerXp: 5,
+    firstVisitRecipe: 'MANGO_STICKY_RICE',
   },
   FLOWER_FOREST: {
     explorerLevel: 2,
@@ -124,6 +131,7 @@ export const EXPEDITION_SITES: Record<ExpeditionSite, ExpeditionSiteDef> = {
     },
     explorerXp: 18,
     playerXp: 9,
+    firstVisitRecipe: 'JASMINE_GARLAND',
   },
   HERB_VALLEY: {
     explorerLevel: 4,
@@ -139,6 +147,7 @@ export const EXPEDITION_SITES: Record<ExpeditionSite, ExpeditionSiteDef> = {
     },
     explorerXp: 30,
     playerXp: 15,
+    firstVisitRecipe: 'HERBAL_BALM',
   },
 };
 

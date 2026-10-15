@@ -83,6 +83,11 @@ namespace HappyWorld.Unity
         private DistrictPlot _doorPlot;
         private Vector3 _cityCamOffset;
         private const float DistrictResyncSeconds = 45f;
+        // Phase 9.1: the current expedition's countdown; the server decides when it is back
+        public readonly ExpeditionTracker Trips = new ExpeditionTracker();
+        private bool _tripCheckRunning;
+        /// <summary>The app's own monotonic clock for countdowns (unaffected by the phone's date setting).</summary>
+        public static double Clock => Time.realtimeSinceStartupAsDouble;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Boot()
@@ -184,6 +189,13 @@ namespace HappyWorld.Unity
         {
             // Coming back from background: presence may have expired (60 s), so rejoin the zone (or the home).
             if (!paused && Rt != null && Rt.Connected && City.Zone != null) Run(RejoinAsync);
+            // ...and the app clock may not have run while paused, so read the trip's time left again
+            if (!paused) Trips.Resync(Clock);
+        }
+
+        private void OnApplicationFocus(bool focused)
+        {
+            if (focused) Trips.Resync(Clock);
         }
 
         private void OnDestroy()
@@ -282,6 +294,37 @@ namespace HappyWorld.Unity
             RefreshCityNow();
             RefreshGrowth();
             Run(ShowWelcomeBackReportAsync);
+            Trips.Resync(Clock); // reopened the app: load the trip that kept going while it was closed
+        }
+
+        /// <summary>
+        /// Phase 9.1: asks GET /expeditions when the tracker says so (the countdown ended, back from the
+        /// background, a retry after a failure). Failures stay quiet here: the explore screen and the HUD show
+        /// the state instead of a toast every retry.
+        /// </summary>
+        private async void CheckTripAsync()
+        {
+            _tripCheckRunning = true;
+            Trips.BeginCheck(Clock);
+            try
+            {
+                var o = await Api.GetExpeditionsAsync();
+                Trips.Apply(o.active, Clock);
+            }
+            catch (ApiException e)
+            {
+                Debug.LogWarning("expedition check " + e.Status + " " + e.Code);
+                Trips.CheckFailed(Clock, e.IsNetworkError);
+            }
+            catch (Exception e)
+            {
+                Debug.LogException(e);
+                Trips.CheckFailed(Clock, false);
+            }
+            finally
+            {
+                _tripCheckRunning = false;
+            }
         }
 
         /// <summary>Living shop: if customers came while the player was away, show what happened.</summary>
@@ -321,6 +364,7 @@ namespace HappyWorld.Unity
             Rt.Ready += _ =>
             {
                 _autoRetries = 0;
+                Trips.Resync(Clock); // reconnected: a trip may have come back while the link was down
                 Run(RejoinAsync);
             };
             Rt.HomeState += OnHomeState;
@@ -958,6 +1002,7 @@ namespace HappyWorld.Unity
             _district = null;
             _wantHomeOwner = null;
             _wantZone = "PLAZA";
+            Trips.Reset();
             if (_ambience != null)
             {
                 _ambience.Target = null;
@@ -983,6 +1028,11 @@ namespace HappyWorld.Unity
 
         private void Update()
         {
+            if (Api != null && _local != null)
+            {
+                if (!_tripCheckRunning && Trips.CheckDue(Clock)) CheckTripAsync();
+                _ui.TickTrip(Clock);
+            }
             if (Rt == null) return;
             Rt.Pump();
             City.Step(Time.deltaTime);
