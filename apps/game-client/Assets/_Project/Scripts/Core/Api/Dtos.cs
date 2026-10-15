@@ -449,6 +449,8 @@ namespace HappyWorld.Core.Api
         public string friendCode;
         public bool online;
         public string zone;
+        /// <summary>True only when this friend has claimed a home and allows friends to visit.</summary>
+        public bool canVisitHome;
     }
 
     public sealed class FriendRequestResult

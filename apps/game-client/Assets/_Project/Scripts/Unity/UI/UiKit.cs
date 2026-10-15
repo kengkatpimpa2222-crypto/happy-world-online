@@ -135,6 +135,9 @@ namespace HappyWorld.Unity.UI
             b.targetGraphic = img;
             img.gameObject.AddComponent<PressBounce>();
             var label = Label(img.transform, text, size, TextAnchor.MiddleCenter, Color.white);
+            // Some Thai item names have no spaces. Shrink only as needed so they remain inside small mobile buttons.
+            label.resizeTextForBestFit = true;
+            label.resizeTextMinSize = Math.Max(16, size - 12);
             label.rectTransform.Place(Vector2.zero, Vector2.one, new Vector2(8, 4), new Vector2(-8, -4));
             b.onClick.AddListener(() =>
             {

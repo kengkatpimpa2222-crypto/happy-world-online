@@ -342,8 +342,14 @@ namespace HappyWorld.Unity.UI
                 if (friends.Count == 0) UiKit.Row(list, "<size=24>มีเพื่อนแล้วจะไปเยี่ยมบ้านเพื่อนได้ (ถ้าเพื่อนเปิดให้เยี่ยม)</size>", 70);
                 foreach (var f in friends)
                 {
+                    var row = UiKit.Row(list, f.displayName + "  Lv." + f.level);
+                    if (!f.canVisitHome)
+                    {
+                        UiKit.RowButton(row, "ยังไม่เปิด", UiKit.Muted, () => { }, 160);
+                        continue;
+                    }
                     var fid = f.userId;
-                    UiKit.RowButton(UiKit.Row(list, f.displayName + "  Lv." + f.level), "ไปเยี่ยม", UiKit.Primary, () =>
+                    UiKit.RowButton(row, "ไปเยี่ยม", UiKit.Primary, () =>
                     {
                         CloseModal();
                         _s.Run(() => _s.EnterHomeAsync(fid));
