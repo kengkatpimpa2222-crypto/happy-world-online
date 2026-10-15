@@ -72,6 +72,14 @@ Schema: [`apps/backend/prisma/schema.prisma`](../apps/backend/prisma/schema.pris
 - CHECK: game ต้องเป็น CATCH/GRILL/POUR, ดาว 0–3, คะแนนและของที่ได้ไม่ติดลบ
 - จบรอบล็อก `player_profiles` ของผู้เล่นก่อน แล้วค่อยล็อกแถวรอบ กันการกดจบหลายรอบพร้อมกันจนเกินโควตา 15 รอบ/วัน
 
+## Migration ของ Phase 9 (`*_phase9_expeditions_crafting`)
+
+- เพิ่มอย่างเดียว: enum ใหม่ `InventoryTransactionType`, ค่าใหม่ `ItemCategory.MATERIAL`, `WalletTransactionType.CRAFT_FEE`, `QuestObjectiveType` 3 ค่า (EXPEDITION_COMPLETE, GATHER_MATERIAL, CRAFT_ITEM)
+- `inventory_transactions`: ledger ของไอเทม (คู่กับ `wallet_transactions` ของเงิน) ทุกการเปลี่ยนจำนวนไอเทมผ่าน `InventoryService` มีแถวพร้อม `quantity_after` และ `idempotency_key` unique ต่อผู้เล่น trigger ห้าม UPDATE/DELETE, CHECK delta ≠ 0 และ quantity_after ≥ 0 การใช้ไอเทมเป็น UPDATE แบบมีเงื่อนไข (`quantity >= n`) คราฟต์พร้อมกันหลายคำขอจึงใช้เกินที่มีไม่ได้
+- `player_skills`: ทักษะชีวิต (EXPLORER, CRAFTER) PK (user_id, skill) เลเวลคำนวณจาก xp
+- `expeditions`: หนึ่งแถวต่อหนึ่งทริป `seed` ไม่เคยส่งออกจาก server, `explorer_level` ตอนออกเดินทาง (ผลไม่เปลี่ยนแม้เลเวลขึ้นระหว่างทาง), `result` JSON เก็บตอน claim ให้เรียกซ้ำได้เรื่องเดิม partial unique index `expeditions_one_active_per_user` (user_id) WHERE claimed_at IS NULL = ไปได้ทีละทริป CHECK site/plan และ ends_at > started_at
+- วัตถุดิบ 9 ชนิดเป็นแถวใน `items` (id `mat_<code>`, category MATERIAL, ไม่มีราคา จึงไม่โผล่ในร้านค้า) seed สร้างให้
+
 ## ข้อควรรู้
 
 - `wallet_transactions` ลบไม่ได้โดยออกแบบ การลบบัญชีผู้เล่น (สิทธิ์ตาม PDPA) ให้ทำแบบ anonymize/soft delete (`users.status = DELETED`, ล้างอีเมลและชื่อ) แทนการ hard delete

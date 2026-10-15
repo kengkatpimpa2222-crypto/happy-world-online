@@ -40,6 +40,7 @@ enum WalletTransactionType {
   BUSINESS_UPGRADE
   MINIGAME_REWARD
   FESTIVAL_REWARD
+  CRAFT_FEE
   IAP_GRANT
   IAP_REFUND
   ADMIN_ADJUSTMENT
@@ -53,6 +54,8 @@ enum ItemCategory {
   FLOOR
   WALL
   THEME
+  /// Phase 9: gathered on expeditions, used for crafting (never sold in the store)
+  MATERIAL
 }
 
 enum QuestCategory {
@@ -77,6 +80,9 @@ enum QuestObjectiveType {
   SHOP_OPEN
   SHOP_SERVE_CUSTOMERS
   FESTIVAL_CONTRIBUTE
+  EXPEDITION_COMPLETE
+  GATHER_MATERIAL
+  CRAFT_ITEM
 }
 
 /// สถานะแผงร้านในตลาด (Phase 5)
@@ -175,6 +181,9 @@ model User {
   cityBuilds            CityBuilderContribution[]
   festivalClaims        FestivalRewardClaim[]
   minigameSessions      MinigameSession[]
+  expeditions           Expedition[]
+  skills                PlayerSkill[]
+  inventoryTransactions InventoryTransaction[]
 
   @@index([deviceIdHash])
   @@map("users")
@@ -733,4 +742,71 @@ model MinigameSession {
   @@index([userId, bkkDay])
   @@index([userId, game, score])
   @@map("minigame_sessions")
+}
+
+// ---- Phase 9: exploring, materials and crafting ----
+
+enum InventoryTransactionType {
+  EXPEDITION_LOOT
+  CRAFT_CONSUME
+  ADMIN_ADJUSTMENT
+}
+
+/// Append-only ledger of item quantity changes (a DB trigger forbids UPDATE/DELETE), the item twin of
+/// wallet_transactions: every change has an idempotency key, so a retried request can't add items twice.
+model InventoryTransaction {
+  id             String                   @id @default(uuid()) @db.Uuid
+  userId         String                   @map("user_id") @db.Uuid
+  itemId         String                   @map("item_id") @db.VarChar(64)
+  type           InventoryTransactionType
+  delta          Int
+  quantityAfter  Int                      @map("quantity_after")
+  referenceType  String?                  @map("reference_type") @db.VarChar(40)
+  referenceId    String?                  @map("reference_id") @db.VarChar(120)
+  idempotencyKey String                   @map("idempotency_key") @db.VarChar(160)
+  createdAt      DateTime                 @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, idempotencyKey])
+  @@index([userId, createdAt])
+  @@map("inventory_transactions")
+}
+
+/// Life skills (EXPLORER, CRAFTER); the level is derived from xp (skillLevelForXp in shared-contracts).
+model PlayerSkill {
+  userId    String   @map("user_id") @db.Uuid
+  /// EXPLORER | CRAFTER
+  skill     String   @db.VarChar(16)
+  xp        Int      @default(0)
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, skill])
+  @@map("player_skills")
+}
+
+/// One trip. At most one unclaimed trip per player (partial unique index in the migration SQL).
+/// The seed never leaves the server; the outcome is rolled at claim time from (seed, site, plan, explorerLevel).
+model Expedition {
+  id            String    @id @default(uuid()) @db.Uuid
+  userId        String    @map("user_id") @db.Uuid
+  /// ORCHARD | FLOWER_FOREST | HERB_VALLEY
+  site          String    @db.VarChar(24)
+  /// CAREFUL | STEADY | BOLD
+  plan          String    @db.VarChar(12)
+  seed          Int
+  /// Explorer level when the trip started (the outcome depends on it, not on later level-ups)
+  explorerLevel Int       @map("explorer_level")
+  startedAt     DateTime  @default(now()) @map("started_at")
+  endsAt        DateTime  @map("ends_at")
+  claimedAt     DateTime? @map("claimed_at")
+  /// events, loot and XP, stored at claim so a repeated claim returns the same story
+  result        Json?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, startedAt])
+  @@map("expeditions")
 }

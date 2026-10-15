@@ -15,6 +15,6 @@ import { ShopSettlerService } from './shop-settler.service';
   imports: [QuestsModule, RealtimeModule, FestivalModule, CityLifeModule],
   controllers: [BusinessController, MarketController, MinigameController],
   providers: [BusinessService, LivingShopService, ShopSettlerService, MinigameService],
-  exports: [LivingShopService, ShopSettlerService],
+  exports: [LivingShopService, ShopSettlerService, BusinessService],
 })
 export class BusinessModule {}

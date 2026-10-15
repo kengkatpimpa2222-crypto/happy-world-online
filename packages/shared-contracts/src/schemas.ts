@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { BUSINESS_PRODUCT_CODES } from './game-config';
+import { CRAFT_MAX_TIMES, EXPEDITION_PLAN_CODES, EXPEDITION_SITE_CODES, RECIPE_CODES } from './adventure';
 
 /** Header name the client must send on money-moving POSTs. */
 export const IDEMPOTENCY_HEADER = 'idempotency-key';
@@ -154,6 +155,17 @@ export type StartMinigameRequest = z.infer<typeof startMinigameSchema>;
 
 export const finishMinigameSchema = z.object({ score: z.number().int().min(0).max(100_000) }).strict();
 export type FinishMinigameRequest = z.infer<typeof finishMinigameSchema>;
+
+// ---- Exploring and crafting (Phase 9) ----
+export const startExpeditionSchema = z
+  .object({ site: z.enum(EXPEDITION_SITE_CODES), plan: z.enum(EXPEDITION_PLAN_CODES) })
+  .strict();
+export type StartExpeditionRequest = z.infer<typeof startExpeditionSchema>;
+
+export const craftSchema = z
+  .object({ recipe: z.enum(RECIPE_CODES), businessId: z.uuid(), times: z.number().int().min(1).max(CRAFT_MAX_TIMES) })
+  .strict();
+export type CraftRequest = z.infer<typeof craftSchema>;
 
 export const uuidParamSchema = z.uuid();
 export const questIdParamSchema = z.string().regex(/^[a-z0-9_]{2,64}$/);

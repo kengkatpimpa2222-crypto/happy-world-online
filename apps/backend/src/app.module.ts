@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
+import { AdventureModule } from './adventure/adventure.module';
 import { AuditModule } from './audit/audit.module';
 import { AuthModule } from './auth/auth.module';
 import { BusinessModule } from './business/business.module';
@@ -9,6 +10,7 @@ import { FestivalModule } from './festival/festival.module';
 import { AppConfig } from './config/app-config.service';
 import { AppConfigModule } from './config/config.module';
 import { HealthController } from './health/health.controller';
+import { InventoryModule } from './inventory/inventory.module';
 import { PlayerModule } from './player/player.module';
 import { PresenceModule } from './presence/presence.module';
 import { PrismaModule } from './prisma/prisma.module';
@@ -30,6 +32,7 @@ import { WalletModule } from './wallet/wallet.module';
     RedisModule,
     AuditModule,
     WalletModule,
+    InventoryModule,
     PresenceModule,
     SocialGraphModule,
     ThrottlerModule.forRootAsync({
@@ -45,6 +48,7 @@ import { WalletModule } from './wallet/wallet.module';
     StoreModule,
     PurchasesModule,
     BusinessModule,
+    AdventureModule,
     FestivalModule,
     CityLifeModule,
     RealtimeModule,

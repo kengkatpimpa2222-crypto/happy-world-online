@@ -172,6 +172,18 @@ namespace HappyWorld.Core.Api
         public Task<MinigameResult> FinishMinigameAsync(string sessionId, int score) =>
             SendAsync<MinigameResult>("POST", "/minigames/" + sessionId + "/finish", new { score });
 
+        // ---------- Exploring and crafting (Phase 9) ----------
+        public Task<ExpeditionOverview> GetExpeditionsAsync() => SendAsync<ExpeditionOverview>("GET", "/expeditions");
+        public Task<ExpeditionTrip> StartExpeditionAsync(string site, string plan) =>
+            SendAsync<ExpeditionTrip>("POST", "/expeditions/start", new { site, plan });
+        /// <summary>Safe to retry: the trip id makes it idempotent (the same story comes back).</summary>
+        public Task<ExpeditionTrip> ClaimExpeditionAsync(string expeditionId) =>
+            SendAsync<ExpeditionTrip>("POST", "/expeditions/" + expeditionId + "/claim", null);
+        public Task<CraftingOverview> GetCraftingAsync() => SendAsync<CraftingOverview>("GET", "/crafting");
+        /// <param name="idempotencyKey">Create once per tap (IdempotencyKeys.New()); reuse it when retrying the same tap.</param>
+        public Task<CraftResult> CraftAsync(string businessId, string recipe, int times, string idempotencyKey) =>
+            SendAsync<CraftResult>("POST", "/crafting/craft", new { recipe, businessId, times }, idempotencyKey: idempotencyKey);
+
         // ---------- Friends / safety ----------
         public Task<FriendRequestResult> SendFriendRequestByCodeAsync(string friendCode) =>
             SendAsync<FriendRequestResult>("POST", "/friends/requests", new { friendCode = friendCode.Trim().ToUpperInvariant() });

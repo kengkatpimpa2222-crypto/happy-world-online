@@ -197,6 +197,11 @@ namespace HappyWorld.Unity.World
                 case "FLOWER": return new Color(1f, 0.5f, 0.75f);
                 case "THAI_TEA": return new Color(0.95f, 0.55f, 0.25f);
                 case "MEATBALL": return new Color(0.55f, 0.3f, 0.2f);
+                // Phase 9: crafted goods
+                case "MANGO_STICKY_RICE": return new Color(1f, 0.8f, 0.2f);
+                case "JASMINE_GARLAND": return new Color(0.97f, 0.97f, 0.9f);
+                case "HERBAL_BALM": return new Color(0.4f, 0.7f, 0.4f);
+                case "HONEY_MANGO_JAM": return new Color(0.95f, 0.6f, 0.1f);
                 default: return Color.gray;
             }
         }

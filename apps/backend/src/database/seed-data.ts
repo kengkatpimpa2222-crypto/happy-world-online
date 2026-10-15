@@ -1,3 +1,4 @@
+import { MATERIAL_CODES, materialItemId } from '@hwo/shared-contracts';
 import { ItemCategory, QuestCategory, QuestObjectiveType } from '@prisma/client';
 
 /** Catalog prices are starting assumptions for testing; admins can change them in the `items` table. */
@@ -34,6 +35,8 @@ export const ITEMS: {
   { id: 'furn_fest_flower_arch', category: 'FURNITURE', priceGold: null, priceGems: null, metadata: { footprint: [2, 1], festival: 'FLOWER' } },
   { id: 'furn_fest_food_cart', category: 'FURNITURE', priceGold: null, priceGems: null, metadata: { footprint: [2, 1], festival: 'STREET_FOOD' } },
   { id: 'furn_fest_lantern', category: 'FURNITURE', priceGold: null, priceGems: null, metadata: { footprint: [1, 1], festival: 'LANTERN' } },
+  // materials (Phase 9): found on expeditions, used for crafting; never sold in the store
+  ...MATERIAL_CODES.map((code) => ({ id: materialItemId(code), category: 'MATERIAL' as const, priceGold: null, priceGems: null, metadata: { material: code } })),
 ];
 
 export const QUESTS: {
@@ -67,5 +70,9 @@ export const QUESTS: {
   // co-op & life skill
   { id: 'coop_make_friend', category: 'COOP', objectiveType: 'ADD_FRIEND', objectiveTarget: 1, rewardGold: 100, rewardXp: 30 },
   { id: 'life_homemade_goods', category: 'LIFE_SKILL', objectiveType: 'PLAY_MINIGAME', objectiveTarget: 3, rewardGold: 100, rewardXp: 40 },
+  // exploring and crafting (Phase 9)
+  { id: 'explore_first_trip', category: 'LIFE_SKILL', objectiveType: 'EXPEDITION_COMPLETE', objectiveTarget: 1, rewardGold: 80, rewardXp: 30 },
+  { id: 'craft_first_batch', category: 'LIFE_SKILL', objectiveType: 'CRAFT_ITEM', objectiveTarget: 1, rewardGold: 100, rewardXp: 40, prerequisiteQuestId: 'explore_first_trip' },
+  { id: 'explore_gather_30', category: 'LIFE_SKILL', objectiveType: 'GATHER_MATERIAL', objectiveTarget: 30, rewardGold: 150, rewardXp: 50, prerequisiteQuestId: 'explore_first_trip' },
   { id: 'life_budget_buyer', category: 'LIFE_SKILL', objectiveType: 'BUY_ITEM', objectiveTarget: 3, rewardGold: 120, rewardXp: 40, rewardItemId: 'furn_plant_pot' },
 ];

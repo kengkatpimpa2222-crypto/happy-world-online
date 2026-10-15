@@ -163,6 +163,10 @@ namespace HappyWorld.Core.World
                 case "FLOWER": return "ดอกไม้";
                 case "THAI_TEA": return "ชาไทย";
                 case "MEATBALL": return "ลูกชิ้นปิ้ง";
+                case "MANGO_STICKY_RICE": return "ข้าวเหนียวมะม่วง";
+                case "JASMINE_GARLAND": return "พวงมาลัยมะลิ";
+                case "HERBAL_BALM": return "ยาหม่องสมุนไพร";
+                case "HONEY_MANGO_JAM": return "แยมมะม่วงน้ำผึ้ง";
                 default: return code ?? "";
             }
         }
@@ -176,6 +180,10 @@ namespace HappyWorld.Core.World
                 case "BREAD": return "ชิ้น";
                 case "FLOWER": return "ช่อ";
                 case "MEATBALL": return "ไม้";
+                case "MANGO_STICKY_RICE": return "กล่อง";
+                case "JASMINE_GARLAND": return "พวง";
+                case "HERBAL_BALM": return "ตลับ";
+                case "HONEY_MANGO_JAM": return "ขวด";
                 default: return "ชิ้น";
             }
         }

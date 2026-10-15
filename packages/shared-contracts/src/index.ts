@@ -6,3 +6,4 @@ export * from './festival';
 export * from './city-time';
 export * from './city-growth';
 export * from './minigame';
+export * from './adventure';

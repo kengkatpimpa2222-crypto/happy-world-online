@@ -33,6 +33,8 @@ export const envSchema = z.object({
   FESTIVAL_CLOCK_OFFSET_HOURS: z.coerce.number().min(-24 * 7 * 52).max(24 * 7 * 52).default(0),
   /** Dev/QA only (Phase 7): force the city weather (SUNNY | HOT | CLOUDY | RAIN). Empty = real weather. */
   CITY_WEATHER_OVERRIDE: z.preprocess((v) => (v === '' ? undefined : v), z.enum(['SUNNY', 'HOT', 'CLOUDY', 'RAIN']).optional()),
+  /** Dev/QA only (Phase 9): expedition length multiplier, e.g. 0.05 turns a 3-minute trip into 9 s. Must be 1 in production. */
+  EXPEDITION_TIME_SCALE: z.coerce.number().min(0.001).max(1).default(1),
 });
 
 export type Env = z.infer<typeof envSchema>;
@@ -51,6 +53,7 @@ export function validateEnv(raw: Record<string, unknown>): Env {
     }
     if (env.FESTIVAL_CLOCK_OFFSET_HOURS !== 0) throw new Error('FESTIVAL_CLOCK_OFFSET_HOURS must be 0 in production');
     if (env.CITY_WEATHER_OVERRIDE) throw new Error('CITY_WEATHER_OVERRIDE is not allowed in production');
+    if (env.EXPEDITION_TIME_SCALE !== 1) throw new Error('EXPEDITION_TIME_SCALE must be 1 in production');
   }
   return env;
 }
