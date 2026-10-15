@@ -62,6 +62,8 @@ Phase 9 ทำให้ผู้เล่นหาเงินได้หลา
 | `prisma migrate diff --from-migrations … --to-schema-datamodel … --exit-code` | | **No difference detected.** (exit 0) |
 | `prisma migrate status` | | Database schema is up to date! |
 
+หลังรวม Phase 9.1 (commit 43dc0a7) และแก้กล้องจาก QA (65b330a) เข้ามา รันใหม่ทั้งหมดได้ `./scripts/test-all.sh` exit 0, unit **83/83**, e2e **164/164** (18 suites), `dotnet test` **Passed 92, Failed 0** และ drift check ยังไม่พบความต่าง (exit 0)
+
 e2e ใหม่ 16 ข้อ ครอบคลุมทุกข้อที่ขอ:
 - รับบ้านครั้งเดียว (กดพร้อมกัน 5 ครั้ง), ของขวัญครั้งเดียว, ที่ดินไม่ซ้ำกัน, บันทึกก่อนรับบ้านไม่ได้
 - วาง/ย้าย/เก็บ แล้วกระเป๋าเปลี่ยนตรง + เควสต์ `PLACE_FURNITURE`
