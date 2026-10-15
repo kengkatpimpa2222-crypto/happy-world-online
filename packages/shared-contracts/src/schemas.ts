@@ -148,6 +148,15 @@ export const claimFestivalSchema = z.object({
 });
 export type ClaimFestivalRequest = z.infer<typeof claimFestivalSchema>;
 
+export const claimMissionSchema = z
+  .object({
+    /** "D2026-10-15" (a day) or "W2026-10-12" (a week), from GET /daily */
+    periodKey: z.string().regex(/^[DW]\d{4}-\d{2}-\d{2}$/),
+    missionId: z.string().regex(/^[a-z][a-z0-9_]{1,47}$/),
+  })
+  .strict();
+export type ClaimMissionRequest = z.infer<typeof claimMissionSchema>;
+
 export const startMinigameSchema = z
   .object({ businessId: z.uuid(), productCode: businessProductCodeSchema })
   .strict();

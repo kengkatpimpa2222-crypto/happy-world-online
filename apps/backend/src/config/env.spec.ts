@@ -16,4 +16,9 @@ describe('validateEnv', () => {
     expect(() => validateEnv({ ...base, NODE_ENV: 'production', BILLING_MODE: 'mock' })).toThrow(/mock/);
     expect(() => validateEnv({ ...base, NODE_ENV: 'production', JWT_ACCESS_SECRET: 'dev-only-' + 'x'.repeat(30) })).toThrow(/placeholder/);
   });
+
+  it('refuses a shifted daily-reward clock in production (Phase 11)', () => {
+    expect(validateEnv({ ...base, DAILY_CLOCK_OFFSET_HOURS: '48' }).DAILY_CLOCK_OFFSET_HOURS).toBe(48);
+    expect(() => validateEnv({ ...base, NODE_ENV: 'production', DAILY_CLOCK_OFFSET_HOURS: '1' })).toThrow(/DAILY_CLOCK_OFFSET_HOURS/);
+  });
 });

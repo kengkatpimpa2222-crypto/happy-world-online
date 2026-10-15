@@ -24,6 +24,8 @@ namespace HappyWorld.Unity.UI
         private RectTransform _banner;
         private Text _nameText, _moneyText, _zoneText, _cashText;
         private Text _festivalText;
+        private Text _dailyText;
+        private Image _dailyBg;
         private Text _cityText;
         private Image _festivalBg;
         private float _lastSaleToast = -999f;
@@ -230,6 +232,13 @@ namespace HappyWorld.Unity.UI
             _cityText.raycastTarget = true; // labels are not tappable by default
             var cityTap = _cityText.gameObject.AddComponent<Button>();
             cityTap.onClick.AddListener(ShowCity);
+
+            // Phase 11: daily check-in and missions, right under the money bar (a big touch target, never a pop-up)
+            var dailyBtn = UiKit.Button(_hud, Texts.T("ui.daily"), new Color(1f, 0.93f, 0.7f, 0.95f), ShowDaily, 28);
+            dailyBtn.GetComponent<RectTransform>().Place(new Vector2(0, 1), new Vector2(0.36f, 1), new Vector2(16, -296), new Vector2(0, -212));
+            _dailyBg = dailyBtn.GetComponent<Image>();
+            _dailyText = dailyBtn.GetComponentInChildren<Text>();
+            _dailyText.color = UiKit.Ink;
 
             // Phase 6: this week's city festival (tap for goals and rewards)
             var fest = UiKit.Button(_hud, Texts.T("ui.festival"), new Color(1f, 0.84f, 0.31f, 0.92f), ShowFestival, 26);
@@ -482,6 +491,7 @@ namespace HappyWorld.Unity.UI
         {
             var p = _s.Profile;
             if (p != null) _nameText.text = p.displayName + "  Lv." + p.level;
+            _s.RefreshDaily(); // most actions that move a mission end here (sell, collect, craft, claim)
             _s.Run(async () =>
             {
                 var w = await _s.Api.GetWalletAsync();
@@ -594,6 +604,107 @@ namespace HappyWorld.Unity.UI
                 UiKit.Row(list, "<b>ผู้ช่วยแห่งเมือง</b>", 60);
                 foreach (var h in f.top)
                     UiKit.Row(list, "<size=26>" + h.rank + ". " + FestivalPresenter.HelperName(h) + " · " + h.points + " ชิ้น</size>", 60);
+            }
+        }
+
+        // ---------- daily rewards & missions (Phase 11) ----------
+
+        /// <summary>Updates the HUD button from the last GET /daily.</summary>
+        public void SetDaily(DailyState st)
+        {
+            if (_dailyText == null) return;
+            _dailyText.text = DailyPresenter.HudLabel(st);
+            _dailyBg.color = st != null && st.claimable > 0 ? new Color(1f, 0.8f, 0.3f, 0.97f) : new Color(1f, 0.93f, 0.7f, 0.95f);
+        }
+
+        /// <summary>Check-in track (7 tiles), today's 3 missions and this week's missions. All times are the server's.</summary>
+        public void ShowDaily()
+        {
+            var list = OpenModal(Texts.T("ui.daily"));
+            Loading(list);
+            _s.Run(async () =>
+            {
+                var st = await _s.Api.GetDailyAsync();
+                _s.OnDaily(st);
+                UiKit.Clear(list);
+                FillDaily(list, st);
+            });
+        }
+
+        private void FillDaily(RectTransform list, DailyState st)
+        {
+            var c = st.checkin;
+            var now = _s.DailyNow;
+
+            // check-in: headline + button, then the 7 tiles
+            var head = UiKit.Row(list, "<b>" + DailyPresenter.CheckinHeadline(c) + "</b>", 100);
+            if (!c.claimedToday)
+                UiKit.RowButton(head, Texts.T("ui.checkin"), UiKit.Good, () => _s.Run(async () =>
+                {
+                    try
+                    {
+                        var r = await _s.Api.CheckinAsync();
+                        Toast(DailyPresenter.CheckinToast(r));
+                    }
+                    finally
+                    {
+                        RefreshHud();
+                        ShowDaily(); // also after CHECKIN_ALREADY_CLAIMED (checked in on another device): show the truth
+                    }
+                }), 200);
+            var tiles = UiKit.Row(list, "", 168);
+            tiles.GetChild(0).gameObject.SetActive(false); // the row's own label: tiles fill the row instead
+            foreach (var step in c.track)
+            {
+                var color = step.state == "CLAIMED" ? new Color(0.82f, 0.93f, 0.84f) : step.state == "TODAY" ? new Color(1f, 0.85f, 0.42f) : Color.white;
+                var tile = UiKit.Box("Day" + step.step, tiles, color).Round(false, 0.6f);
+                var le = tile.gameObject.AddComponent<LayoutElement>();
+                le.flexibleWidth = 1;
+                le.minWidth = 60;
+                var t = UiKit.Label(tile.transform, DailyPresenter.StepTile(step), 26, TextAnchor.MiddleCenter);
+                t.resizeTextForBestFit = true; // long Thai item names on narrow phones
+                t.resizeTextMinSize = 14;
+                t.resizeTextMaxSize = 26;
+                t.rectTransform.Place(Vector2.zero, Vector2.one, new Vector2(4, 4), new Vector2(-4, -4));
+            }
+            UiKit.Row(list, "<size=24>" + DailyPresenter.NoPressureNote + "</size>", 64);
+
+            FillMissions(list, "ภารกิจวันนี้", DailyPresenter.ResetLine(st.daily.endsAt, now, false), st.daily.missions);
+            FillMissions(list, "ภารกิจสัปดาห์นี้", DailyPresenter.ResetLine(st.weekly.endsAt, now, true), st.weekly.missions);
+        }
+
+        private void FillMissions(RectTransform list, string title, string resetLine, List<Mission> missions)
+        {
+            UiKit.Row(list, "<b>" + title + "</b>  <size=24>" + resetLine + "</size>", 70);
+            foreach (var m in DailyPresenter.Sorted(missions))
+            {
+                var when = m.fromPreviousPeriod ? "  <size=22><color=#C0392B>ของรอบที่แล้ว รับก่อนหมดเวลา</color></size>" : "";
+                var reward = DailyPresenter.RewardText(m.rewards.gold, m.rewards.item, m.rewards.xp);
+                var row = UiKit.Row(list, DailyPresenter.Title(m) + "  <size=24>" + DailyPresenter.ProgressText(m) + "</size>" + when +
+                                          "\n<size=24>" + reward + "</size>", 120);
+                var track = UiKit.Box("Track", row, new Color(0.88f, 0.88f, 0.9f)).rectTransform;
+                track.gameObject.AddComponent<LayoutElement>().ignoreLayout = true;
+                track.Place(new Vector2(0, 0), new Vector2(1, 0), new Vector2(20, 8), new Vector2(-230, 20));
+                UiKit.Box("Fill", track, m.Claimed ? UiKit.Muted : UiKit.Good).rectTransform.Place(Vector2.zero, new Vector2(DailyPresenter.Progress(m), 1));
+                if (m.CanClaim)
+                {
+                    var periodKey = m.periodKey;
+                    var id = m.id;
+                    UiKit.RowButton(row, Texts.T("ui.claim"), UiKit.Good, () => _s.Run(async () =>
+                    {
+                        try
+                        {
+                            var r = await _s.Api.ClaimMissionAsync(periodKey, id);
+                            Toast(DailyPresenter.ClaimToast(r));
+                            ApplyLevel(r.level);
+                        }
+                        finally
+                        {
+                            RefreshHud();
+                            ShowDaily();
+                        }
+                    }), 200);
+                }
             }
         }
 

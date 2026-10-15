@@ -160,6 +160,14 @@ namespace HappyWorld.Core.Api
         public Task<FestivalClaimResult> ClaimFestivalAsync(string festivalKey, int tier) =>
             SendAsync<FestivalClaimResult>("POST", "/festival/claim", new { festivalKey, tier });
 
+        // ---------- Daily rewards & missions (Phase 11) ----------
+        public Task<DailyState> GetDailyAsync() => SendAsync<DailyState>("GET", "/daily");
+        /// <summary>Once per Bangkok day; a second tap answers CHECKIN_ALREADY_CLAIMED (just re-read GET /daily).</summary>
+        public Task<CheckinResult> CheckinAsync() => SendAsync<CheckinResult>("POST", "/daily/checkin", null);
+        /// <summary>Safe to retry: a second claim answers MISSION_ALREADY_CLAIMED and pays nothing.</summary>
+        public Task<MissionClaimResult> ClaimMissionAsync(string periodKey, string missionId) =>
+            SendAsync<MissionClaimResult>("POST", "/daily/missions/claim", new { periodKey, missionId });
+
         // ---------- Living city (Phase 7) ----------
         public Task<CityNow> GetCityNowAsync() => SendAsync<CityNow>("GET", "/city/now");
         public Task<CityGrowth> GetCityGrowthAsync() => SendAsync<CityGrowth>("GET", "/city/growth");

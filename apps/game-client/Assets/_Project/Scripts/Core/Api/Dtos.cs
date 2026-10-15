@@ -366,6 +366,107 @@ namespace HappyWorld.Core.Api
         public Dictionary<string, int> wallet = new Dictionary<string, int>();
     }
 
+    // ---------- Daily rewards & missions (Phase 11): GET /daily ----------
+
+    public sealed class RewardItem
+    {
+        public string itemId;
+        public int quantity;
+    }
+
+    public sealed class CheckinStep
+    {
+        /// <summary>1..7</summary>
+        public int step;
+        public int gold;
+        public RewardItem item;
+        /// <summary>CLAIMED, TODAY or UPCOMING</summary>
+        public string state;
+    }
+
+    public sealed class CheckinView
+    {
+        /// <summary>Bangkok day "YYYY-MM-DD" (server's clock)</summary>
+        public string today;
+        public bool claimedToday;
+        /// <summary>the step that belongs to today (claimed, or the one a check-in now lands on)</summary>
+        public int todayStep;
+        public int totalDays;
+        public DateTime nextResetAt;
+        public List<CheckinStep> track = new List<CheckinStep>();
+    }
+
+    public sealed class MissionRewards
+    {
+        public int gold;
+        public int xp;
+        public RewardItem item;
+    }
+
+    public sealed class Mission
+    {
+        public string id;
+        /// <summary>"D2026-10-15" or "W2026-10-12"; send it back when claiming</summary>
+        public string periodKey;
+        /// <summary>DAILY or WEEKLY</summary>
+        public string period;
+        public string objective;
+        public int target;
+        public int progress;
+        /// <summary>IN_PROGRESS, COMPLETED or CLAIMED</summary>
+        public string status;
+        public MissionRewards rewards = new MissionRewards();
+        public string titleTh;
+        public string titleEn;
+        /// <summary>finished yesterday / last week and still waiting to be claimed</summary>
+        public bool fromPreviousPeriod;
+
+        public bool CanClaim => status == "COMPLETED";
+        public bool Claimed => status == "CLAIMED";
+    }
+
+    public sealed class MissionPeriodView
+    {
+        public string periodKey;
+        public DateTime endsAt;
+        public List<Mission> missions = new List<Mission>();
+    }
+
+    public sealed class DailyState
+    {
+        public DateTime now;
+        public CheckinView checkin = new CheckinView();
+        public MissionPeriodView daily = new MissionPeriodView();
+        public MissionPeriodView weekly = new MissionPeriodView();
+        /// <summary>check-in (if not done today) + finished missions: the HUD badge</summary>
+        public int claimable;
+    }
+
+    public sealed class CheckinRewards
+    {
+        public int gold;
+        public RewardItem item;
+    }
+
+    public sealed class CheckinResult
+    {
+        public string day;
+        public int step;
+        public int totalDays;
+        public CheckinRewards rewards = new CheckinRewards();
+        public DateTime nextResetAt;
+        public Dictionary<string, int> wallet = new Dictionary<string, int>();
+    }
+
+    public sealed class MissionClaimResult
+    {
+        public string periodKey;
+        public string missionId;
+        public MissionRewards rewards = new MissionRewards();
+        public int? level;
+        public Dictionary<string, int> wallet = new Dictionary<string, int>();
+    }
+
     public sealed class MarketStallProduct
     {
         public string productCode;
