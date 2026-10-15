@@ -11,9 +11,14 @@ import {
 import {
   canInteract,
   ErrorCode,
+  HOME_MAX_OCCUPANTS,
+  HOME_ZONE,
+  homeInterior,
+  homeRoomName,
   MAX_MOVE_SPEED,
   WS_NAMESPACE,
   WsEvent,
+  wsHomeEnterSchema,
   wsInviteSchema,
   wsMoveSchema,
   wsPresetChatSchema,
@@ -25,12 +30,13 @@ import { z } from 'zod';
 import { AppException } from '../common/app-exception';
 import { AuthUser } from '../common/decorators';
 import { SessionVerifier } from '../auth/session-verifier.service';
+import { HomeAccessService } from '../home/home-access.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { PresenceEntry } from '../presence/presence.store';
 import { PresenceService } from '../presence/presence.service';
 import { SocialGraphService } from '../social/social-graph.service';
 import { CityService } from './city.service';
-import { BLOCKS_CHANGED, RealtimeService, userRoom } from './realtime.service';
+import { BLOCKS_CHANGED, HOME_ACCESS_CHANGED, RealtimeService, userRoom } from './realtime.service';
 
 interface Bucket {
   tokens: number;
@@ -76,6 +82,7 @@ export class CityGateway implements OnGatewayInit, OnGatewayDisconnect {
     private readonly graph: SocialGraphService,
     private readonly city: CityService,
     private readonly realtime: RealtimeService,
+    private readonly homeAccess: HomeAccessService,
   ) {}
 
   afterInit(ns: Namespace): void {
@@ -91,7 +98,12 @@ export class CityGateway implements OnGatewayInit, OnGatewayDisconnect {
     });
     ns.on('connection', (socket: AppSocket) => void this.safely('connect', () => this.onConnected(socket)));
     ns.on(BLOCKS_CHANGED, (ids: string[]) => void this.safely('blocks-changed', () => this.reloadBlocks(ids)));
-    this.realtime.attach(ns, (ids) => this.reloadBlocks(ids));
+    ns.on(HOME_ACCESS_CHANGED, (ids: string[]) => void this.safely('home-access-changed', () => this.revalidateHomes(ids)));
+    this.realtime.attach(
+      ns,
+      (ids) => this.reloadBlocks(ids),
+      (ids) => this.revalidateHomes(ids),
+    );
   }
 
   private async authenticate(socket: AppSocket): Promise<void> {
@@ -183,7 +195,9 @@ export class CityGateway implements OnGatewayInit, OnGatewayDisconnect {
     return this.handle(socket, 'move', wsMoveSchema, body, async (m) => {
       const me = await this.current(socket);
       if (!me.room || !me.zone) throw AppException.conflict(ErrorCode.NOT_IN_ZONE, 'Join a zone first');
-      const zone = zoneById(me.zone)!;
+      // inside a home the room size was fixed when the player walked in (Phase 10)
+      const zone = me.zone === HOME_ZONE ? me.bounds : zoneById(me.zone);
+      if (!zone) throw AppException.conflict(ErrorCode.NOT_IN_ZONE, 'Join a zone first');
       const now = Date.now();
       const dt = Math.max(50, now - me.lastMoveAt) / 1000;
       const dist = Math.hypot(m.x - me.x, m.y - me.y);
@@ -229,6 +243,54 @@ export class CityGateway implements OnGatewayInit, OnGatewayDisconnect {
         zone: me.zone,
       });
       return {};
+    });
+  }
+
+  /**
+   * Phase 10: walk into a home. The same access rules as GET /homes/:ownerId (HomeAccessService) decide;
+   * each home is its own room, so moves and preset chat inside reach only the people in that home.
+   * Leave by joining a zone again (zone:join HOMES).
+   */
+  @SubscribeMessage(WsEvent.HOME_ENTER)
+  homeEnter(@ConnectedSocket() socket: AppSocket, @MessageBody() body: unknown): Promise<Ack> {
+    return this.handle(socket, 'zone', wsHomeEnterSchema, body, async ({ ownerId }) => {
+      const { user } = socket.data;
+      const access = await this.homeAccess.check(user.userId, user.ageBand, ownerId);
+      const home = await this.prisma.playerHome.findUniqueOrThrow({
+        where: { id: access.homeId },
+        select: { gridWidth: true, gridHeight: true, layoutVersion: true, user: { select: { profile: { select: { displayName: true } } } } },
+      });
+      const room = homeRoomName(ownerId);
+      const me = await this.current(socket);
+      if (me.room !== room && !access.isOwner && (await this.presence.listRoom(room)).length >= HOME_MAX_OCCUPANTS) {
+        throw AppException.conflict(ErrorCode.HOME_FULL, 'This home is full right now');
+      }
+      if (me.room && me.room !== room) {
+        await socket.leave(me.room);
+        this.broadcast(socket, me.room, WsEvent.PLAYER_LEFT, { userId: user.userId });
+      }
+      const interior = homeInterior(home.gridWidth, home.gridHeight);
+      const entry: PresenceEntry = {
+        ...this.entry(socket, { zone: HOME_ZONE, room, x: interior.spawn.x, y: interior.spawn.y, dir: 0 }),
+        bounds: { width: interior.width, height: interior.height },
+      };
+      await this.presence.upsert(entry);
+      await socket.join(room);
+      const friends = new Set(await this.graph.friendIds(user.userId));
+      const players = await this.city.visibleInRoom(user.userId, room, socket.data.blocked, friends);
+      this.broadcast(socket, room, WsEvent.PLAYER_JOINED, this.city.toPublic(entry));
+      const state = {
+        ownerId,
+        ownerName: home.user.profile?.displayName ?? '',
+        isMine: access.isOwner,
+        room,
+        interior,
+        layoutVersion: home.layoutVersion,
+        you: { x: entry.x, y: entry.y },
+        players,
+      };
+      socket.emit(WsEvent.HOME_STATE, state);
+      return state;
     });
   }
 
@@ -312,6 +374,26 @@ export class CityGateway implements OnGatewayInit, OnGatewayDisconnect {
     };
   }
 
+  /**
+   * Phase 10: re-checks everyone visiting these owners' homes on this instance; whoever may no longer be there
+   * (owner went private, unfriended or blocked them) is told `home:kicked` and leaves the room at once.
+   */
+  private async revalidateHomes(ownerIds: string[]): Promise<void> {
+    for (const ownerId of ownerIds) {
+      const room = homeRoomName(ownerId);
+      for (const s of await this.ns.in(room).local.fetchSockets()) {
+        const data = s.data as SocketData | undefined;
+        if (!data?.user || data.user.userId === ownerId) continue;
+        if (await this.homeAccess.allowed(data.user.userId, data.user.ageBand, ownerId)) continue;
+        s.leave(room);
+        const e = await this.presence.get(data.user.userId);
+        if (e && e.socketId === s.id && e.room === room) await this.presence.upsert({ ...e, zone: null, room: null, bounds: undefined });
+        this.ns.to(room).emit(WsEvent.PLAYER_LEFT, { userId: data.user.userId });
+        s.emit(WsEvent.HOME_KICKED, { ownerId });
+      }
+    }
+  }
+
   /** After a block/unblock: refresh cached block lists and make the two players vanish for each other. */
   private async reloadBlocks(ids: string[]): Promise<void> {
     for (const id of ids) {
@@ -323,5 +405,6 @@ export class CityGateway implements OnGatewayInit, OnGatewayDisconnect {
         for (const other of ids) if (other !== id && blocked.has(other)) s.emit(WsEvent.PLAYER_LEFT, { userId: other });
       }
     }
+    await this.revalidateHomes(ids); // a block also closes each other's homes
   }
 }

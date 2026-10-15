@@ -55,12 +55,14 @@ Assets/_Project/
     Api/             HappyWorldApi (REST ทุก endpoint ที่เกมใช้), DTO, ApiException, TokenStore
     Net/             IHttpTransport, DotNetHttpTransport
     Realtime/        SocketIoClient (Socket.IO v5/Engine.IO v4 บน ClientWebSocket), RealtimeClient (event ตาม docs/realtime.md)
-    World/           CityState (ผู้เล่นอื่น + interpolation), MovementLimiter (10 Hz, ไม่เกิน 8 หน่วย/วินาที)
+    World/           CityState (ผู้เล่นอื่น + interpolation), MovementLimiter (10 Hz, ไม่เกิน 8 หน่วย/วินาที),
+                     HomeLayoutEditor (จัดบ้าน: หยิบ ย้าย หมุน วาง เก็บ), HomePresenter (ข้อความ/คำนวณตารางบ้าน)
     Localization/    Texts (ข้อความไทย/อังกฤษ, error code → ข้อความ)
   Scripts/Unity/     (HappyWorld.Unity.asmdef)
     GameSession.cs   จุดเริ่มเกม (RuntimeInitializeOnLoadMethod), flow login → สร้างตัวละคร → เมือง
     Net/             UnityWebRequestTransport, PlayerPrefsTokenStore, MainThread
-    World/           CityBuilder (สร้างโซนจาก GET /city), AvatarView, LocalPlayerController, CameraFollow
+    World/           CityBuilder (สร้างโซนจาก GET /city), AvatarView, LocalPlayerController, CameraFollow,
+                     HomeDistrictView (ถนนย่านบ้าน), HomeInteriorView (ห้องในบ้าน + เฟอร์นิเจอร์ + เงาตอนวาง)
     UI/              UiKit (uGUI จากโค้ด), VirtualJoystick, GameScreens (ทุกหน้าจอ)
   Editor/            ProjectSetup (ตั้งค่า + build APK)
   Resources/         HWOFont.otf (ฟอนต์ไทย)
@@ -75,6 +77,7 @@ Tests/HappyWorld.Core.Tests   xunit: unit + integration กับ backend จร
 - **Refresh token** เก็บใน PlayerPrefs (ไม่เข้ารหัส) ใช้ได้เฉพาะช่วงพัฒนา ก่อนปล่อยต้องเปลี่ยนเป็น Android Keystore / iOS Keychain (`ITokenStore` แทนได้ทันที)
 - **ภาพและเสียง** (Phase 8): โมเดล low-poly ของ Kenney (CC0) เก็บเป็นไฟล์ `.glb` ในชื่อ `.bytes` ที่ `Resources/Art/Models/` และโหลดตอนรันด้วยตัวอ่าน GLB ของเราเอง (`Core/Art/GlbModel.cs`, `Unity/Art/ModelLibrary.cs`) จึงไม่ต้องลง package glTF ถ้าไฟล์โมเดลหายไป เกมจะกลับไปใช้ primitive แบบเดิมเอง เพลงและเสียงอยู่ที่ `Resources/Art/Audio/` (`Unity/Audio/GameAudio.cs`) การตั้งค่า import ของภาพและเสียงตั้งให้อัตโนมัติด้วย `Editor/ArtImportSettings.cs` ที่มาและลิขสิทธิ์ทุกไฟล์อยู่ใน [apps/game-client/ART_CREDITS.md](../apps/game-client/ART_CREDITS.md)
 - **มินิเกม**: ปุ่ม "ทำเอง" ในหน้าร้านเปิด `Unity/Minigames/MinigameScreen.cs` ลอจิกของเกมอยู่ใน `Core/Minigames/` (ไม่พึ่ง Unity, มีเทสต์) คะแนนและของที่ได้ server เป็นคนตัดสิน
+- **บ้าน** (Phase 10): ปุ่ม "บ้าน" บน HUD เปิดหน้ารับบ้าน/ตั้งสิทธิ์เยี่ยม/รายชื่อบ้านเพื่อน ในโซน HOMES เดินไปยืนบนพรมหน้าบ้าน (สีเขียว = เข้าได้) แล้วกด E หรือปุ่มที่ขึ้นมา ในบ้านเดินไปที่ประตูหรือกด "ออกจากบ้าน" โหมด "จัดบ้าน" เปลี่ยนเป็นกล้องมองลง: เมาส์ชี้ตำแหน่ง คลิกเพื่อหยิบ/วาง, R หมุน, Delete เก็บเข้ากระเป๋า, Esc ยกเลิกชิ้นในมือ บนมือถือแตะช่องเพื่อย้าย แตะช่องเดิมอีกครั้งเพื่อวาง และใช้ปุ่มในแถบด้านล่าง ไม่มีอะไรส่งไป server จนกด "บันทึก" (ถ้าเน็ตหลุดกดบันทึกซ้ำได้ด้วย key เดิม ถ้าบ้านถูกแก้จากอีกเครื่องจะโหลดใหม่ให้)
 - **Input**: ใช้ Input Manager แบบเดิม (ไม่ต้องลง Input System package) ถ้า Unity ถามให้เปิด Input System ให้ตอบ No หรือตั้ง Active Input Handling = Both
 - Client ไม่คำนวณเงินหรือรางวัลเอง แสดงตามที่ server ตอบเท่านั้น ปุ่มซื้อสร้าง `Idempotency-Key` ใหม่ต่อการกดหนึ่งครั้ง
 

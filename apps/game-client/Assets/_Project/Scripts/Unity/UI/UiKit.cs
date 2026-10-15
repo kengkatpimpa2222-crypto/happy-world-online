@@ -135,6 +135,12 @@ namespace HappyWorld.Unity.UI
             b.targetGraphic = img;
             img.gameObject.AddComponent<PressBounce>();
             var label = Label(img.transform, text, size, TextAnchor.MiddleCenter, Color.white);
+            // Some Thai item names have no spaces. Shrink only as needed so they remain inside small mobile buttons.
+            label.resizeTextForBestFit = true;
+            label.resizeTextMinSize = Math.Max(16, size - 12);
+            // Best Fit also grows text up to resizeTextMaxSize (default 40): cap it at the requested size, otherwise
+            // HUD buttons got bigger text and the festival banner wrapped over the clock line (Phase 10 QA).
+            label.resizeTextMaxSize = size;
             label.rectTransform.Place(Vector2.zero, Vector2.one, new Vector2(8, 4), new Vector2(-8, -4));
             b.onClick.AddListener(() =>
             {

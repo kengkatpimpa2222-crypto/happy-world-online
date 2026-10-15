@@ -22,6 +22,7 @@ socket.on('ready', () => socket.emitWithAck('zone:join', { zone: 'PLAZA' }));
 | `move` | `{ x, y, dir?, seq? }` | ขยับตัว server ตรวจขอบเขตและความเร็วสูงสุด 8 หน่วย/วินาที | 20/วินาที (burst 30) |
 | `chat:preset` | `{ presetId }` | ส่งข้อความสำเร็จรูปในโซน (ไม่มีแชตพิมพ์อิสระ) | 1 ทุก 2 วินาที (burst 3) |
 | `friend:invite` | `{ friendId, activity }` | ชวนเพื่อนที่ออนไลน์ | 1 ทุก 3 วินาที (burst 2) |
+| `home:enter` | `{ ownerId }` | (Phase 10) เข้าบ้าน ตรวจสิทธิ์แบบเดียวกับ `GET /homes/:ownerId` ห้องเต็ม (12 คน) = `HOME_FULL` ack คืนสถานะบ้าน ออกจากบ้านด้วย `zone:join` หรือ `zone:leave` | ร่วมกับ zone |
 | `heartbeat` | – | ต่ออายุสถานะออนไลน์ (หมดอายุใน 60 วินาทีถ้าเงียบ) | 1/วินาที |
 
 ## Server → Client
@@ -43,6 +44,9 @@ socket.on('ready', () => socket.emitWithAck('zone:join', { zone: 'PLAZA' }));
 | `shop:updated` | (Phase 5) ส่งให้เจ้าของร้านเท่านั้น: `{ businessId, cashBox, customers, buyers, unitsSold, revenue, stall: [{ productCode, shelfQuantity }], festivalPoints, cityPoints }` (`festivalPoints` เพิ่มใน Phase 6 = สินค้าเทศกาลที่ขายได้ในรอบนี้, `cityPoints` เพิ่มใน Phase 7 = แต้มสร้างเมืองจากรอบนี้) ตั้งแต่ Phase 7 ส่งด้วยเมื่อร้านถูกคิดบัญชีตอนเจ้าของตั้งราคา/เติมของ/อัปเกรด |
 | `festival:milestone` | (Phase 6) ส่งให้ทุกคนในทุกโซนของเมืองช่วงอายุเดียวกัน เมื่อการขายทำให้เมืองถึงขั้นใหม่: `{ festivalKey, code, tier, points }` client ประดับเมืองเพิ่มและจุดพลุ |
 | `city:growth` | (Phase 7) ส่งให้ทุกคนในทุกโซนของเมืองช่วงอายุเดียวกัน เมื่อการขายทำให้โครงการเมืองสร้างเสร็จ: `{ projectCode, nameTh, effectTh, index, points, next }` client สร้างตึกใหม่และขึ้นข้อความ |
+| `home:state` | (Phase 10) `{ ownerId, ownerName, isMine, room, interior: {width, height, spawn}, layoutVersion, you: {x,y}, players }` หลัง `home:enter` (ack ก็คืนค่าเดียวกัน) เฟอร์นิเจอร์โหลดจาก `GET /homes/:ownerId` |
+| `home:layout` | (Phase 10) ส่งให้คนในบ้านนั้นเท่านั้น: `{ ownerId, layoutVersion }` เจ้าของบันทึกผังใหม่ ให้โหลด `GET /homes/:ownerId` ใหม่ |
+| `home:kicked` | (Phase 10) `{ ownerId }` หมดสิทธิ์อยู่ในบ้าน (เจ้าของเปลี่ยนเป็นส่วนตัว, เลิกเป็นเพื่อน, บล็อก) server พาออกจากห้องแล้ว |
 
 `PublicPlayer = { userId, displayName, level, avatar, x, y, dir }` ไม่มี friend code, อีเมล หรือช่วงอายุ
 
@@ -51,4 +55,5 @@ socket.on('ready', () => socket.emitWithAck('zone:join', { zone: 'PLAZA' }));
 - **ห้องแยกตามช่วงอายุ**: ห้องคือ `zone:<ZONE>:<AGE_BAND>:<shard>` ผู้เล่นต่างช่วงอายุไม่เห็นกัน ไม่ได้ยินกัน
 - **บล็อก**: ผู้ที่บล็อกกัน (ทางใดทางหนึ่ง) ไม่ได้รับ event ของกันและกัน หายจากจอทันทีที่บล็อก
 - **Shard**: แต่ละโซนรับผู้เล่นได้จำกัด (PLAZA 50 คน) เกินแล้วเปิด shard ใหม่อัตโนมัติ
+- **บ้าน** (Phase 10): ห้อง `home:<ownerId>` ไม่ broadcast ออกนอกบ้าน `move` ในบ้านใช้ขอบเขตห้อง เมื่อสิทธิ์เปลี่ยน server ตรวจผู้มาเยี่ยมทุกคนใหม่ (ผ่าน Redis ถ้ามีหลาย instance)
 - หลาย instance: ตั้ง `REDIS_URL` แล้ว presence และ event จะใช้ Redis (Socket.IO Redis adapter) ร่วมกัน

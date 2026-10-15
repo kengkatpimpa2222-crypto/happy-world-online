@@ -10,6 +10,8 @@ import { FestivalModule } from './festival/festival.module';
 import { AppConfig } from './config/app-config.service';
 import { AppConfigModule } from './config/config.module';
 import { HealthController } from './health/health.controller';
+import { HomeAccessModule } from './home/home-access.service';
+import { HomeModule } from './home/home.module';
 import { InventoryModule } from './inventory/inventory.module';
 import { PlayerModule } from './player/player.module';
 import { PresenceModule } from './presence/presence.module';
@@ -35,6 +37,7 @@ import { WalletModule } from './wallet/wallet.module';
     InventoryModule,
     PresenceModule,
     SocialGraphModule,
+    HomeAccessModule,
     ThrottlerModule.forRootAsync({
       inject: [AppConfig, RedisService],
       useFactory: (config: AppConfig, redis: RedisService) => ({
@@ -49,6 +52,7 @@ import { WalletModule } from './wallet/wallet.module';
     PurchasesModule,
     BusinessModule,
     AdventureModule,
+    HomeModule,
     FestivalModule,
     CityLifeModule,
     RealtimeModule,

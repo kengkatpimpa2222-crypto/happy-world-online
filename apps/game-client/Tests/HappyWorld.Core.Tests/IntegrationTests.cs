@@ -217,6 +217,89 @@ namespace HappyWorld.Core.Tests
             }
         }
 
+        /// <summary>Phase 10: claim a home, decorate it, log out and back in, and let a friend walk in.</summary>
+        [Fact]
+        public async Task FirstHomeDecorateAndVisit()
+        {
+            if (Url == null) return;
+            var owner = await NewGuest();
+            var home = await owner.GetMyHomeAsync();
+            Assert.False(home.claimed);
+            var claim = await owner.ClaimHomeAsync();
+            Assert.True(claim.home.claimed);
+            var again = await Assert.ThrowsAsync<ApiException>(() => owner.ClaimHomeAsync());
+            Assert.Equal("HOME_ALREADY_CLAIMED", again.Code);
+
+            var editor = new HomeLayoutEditor(claim.home, await owner.GetHomeFurnitureAsync());
+            Assert.True(editor.TakeFromBag("furn_single_bed"));
+            editor.MoveHeld(0, 0);
+            Assert.True(editor.Drop());
+            Assert.True(editor.TakeFromBag("furn_wood_table"));
+            editor.MoveHeld(4, 4);
+            editor.RotateHeld();
+            Assert.True(editor.Drop());
+            var key = IdempotencyKeys.New();
+            var saved = await owner.SaveHomeLayoutAsync(editor.BaseVersion, editor.ToRequest(), key);
+            var retried = await owner.SaveHomeLayoutAsync(editor.BaseVersion, editor.ToRequest(), key);
+            Assert.False(saved.replayed);
+            Assert.True(retried.replayed);
+            Assert.Equal(2, saved.home.furniture.Count);
+            var stale = await Assert.ThrowsAsync<ApiException>(() => owner.SaveHomeLayoutAsync(0, editor.ToRequest(), IdempotencyKeys.New()));
+            Assert.Equal("HOME_LAYOUT_CONFLICT", stale.Code);
+            var bag = await owner.GetHomeFurnitureAsync();
+            Assert.Equal(0, bag.Single(b => b.itemId == "furn_single_bed").inBag);
+            Assert.Equal(1, bag.Single(b => b.itemId == "furn_single_bed").placed);
+
+            // log out, log in on "another device" with e-mail: the same layout comes back
+            var email = "home-" + Guid.NewGuid().ToString("N").Substring(0, 12) + "@example.com";
+            await owner.LinkAccountAsync(email, "correct horse battery");
+            await owner.LogoutAsync();
+            var pc = new HappyWorldApi(Url, new DotNetHttpTransport(), new InMemoryTokenStore());
+            await pc.LoginAsync(email, "correct horse battery");
+            var back = await pc.GetMyHomeAsync();
+            Assert.Equal(saved.home.layoutVersion, back.layoutVersion);
+            Assert.Equal(saved.home.furniture.Select(f => f.id + f.x + f.y + f.rotation), back.furniture.Select(f => f.id + f.x + f.y + f.rotation));
+
+            // a stranger is turned away; once friends, they may visit and walk in
+            var friend = await NewGuest();
+            var refused = await Assert.ThrowsAsync<ApiException>(() => friend.VisitHomeAsync(pc.UserId));
+            Assert.Equal("HOME_VISIT_NOT_ALLOWED", refused.Code);
+            var code = (await pc.GetProfileAsync()).friendCode;
+            var req = await friend.SendFriendRequestByCodeAsync(code);
+            await pc.AcceptFriendRequestAsync(req.requestId);
+            var visit = await friend.VisitHomeAsync(pc.UserId);
+            Assert.False(visit.isMine);
+            Assert.Equal(2, visit.furniture.Count);
+            Assert.Null(visit.visitPolicy);
+            var district = await friend.GetHomeDistrictAsync(back.plot.street);
+            Assert.Contains(district.plots, p => p.owner != null && p.owner.userId == pc.UserId && p.canVisit);
+
+            var rf = new RealtimeClient(Url, friend.AccessToken);
+            bool ready = false;
+            HomeState state = null;
+            string kicked = null;
+            rf.Ready += _ => ready = true;
+            rf.HomeState += s => state = s;
+            rf.HomeKicked += id => kicked = id;
+            try
+            {
+                await rf.ConnectAsync();
+                await Until(() => ready, rf);
+                var ack = await rf.EnterHomeAsync(pc.UserId);
+                Assert.True(ack.Ok, ack.ErrorCode);
+                await Until(() => state != null, rf);
+                Assert.Equal(pc.UserId, state.ownerId);
+                Assert.False(state.isMine);
+                await pc.SetHomeVisitPolicyAsync("PRIVATE");
+                await Until(() => kicked != null, rf);
+                Assert.Equal(pc.UserId, kicked);
+            }
+            finally
+            {
+                await rf.CloseAsync();
+            }
+        }
+
         [Fact]
         public async Task BadTokenIsRefused()
         {

@@ -73,13 +73,15 @@ namespace HappyWorld.Unity.World
     {
         public Transform Target;
         public Vector3 Offset = new Vector3(0, 11f, -9f);
+        /// <summary>Point looked at, relative to the target (the player's chest by default).</summary>
+        public Vector3 LookOffset = Vector3.up;
 
         private void LateUpdate()
         {
             if (Target == null) return;
             var want = Target.position + Offset;
             transform.position = Vector3.Lerp(transform.position, want, 8f * Time.deltaTime);
-            transform.rotation = Quaternion.LookRotation(Target.position + Vector3.up - transform.position);
+            transform.rotation = Quaternion.LookRotation(Target.position + LookOffset - transform.position);
         }
     }
 }

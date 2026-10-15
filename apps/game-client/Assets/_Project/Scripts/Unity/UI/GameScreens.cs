@@ -27,6 +27,14 @@ namespace HappyWorld.Unity.UI
         private Text _cityText;
         private Image _festivalBg;
         private float _lastSaleToast = -999f;
+        // Phase 10: homes
+        private Button _prompt;
+        private Text _promptText;
+        private string _promptShown;
+        private Action _promptAction;
+        private RectTransform _homeBar, _decorate, _bagRow, _heldRow;
+        private Text _decorateHint;
+        private Button _saveButton;
         // Phase 9.1: live trip countdown on the HUD button and the explore screen
         private Text _exploreText, _tripStatus, _tripButtonText;
         private Button _tripButton;
@@ -238,6 +246,7 @@ namespace HappyWorld.Unity.UI
                 ("ui.bag", ShowBag),
                 ("ui.store", ShowStore),
                 ("ui.shop", ShowShop),
+                ("ui.home", ShowHome),
                 ("ui.explore", ShowExplore),
                 ("ui.city", ShowCity),
                 ("ui.go_market", () => _s.Run(() => _s.JoinZoneAsync("MARKET"))),
@@ -247,11 +256,207 @@ namespace HappyWorld.Unity.UI
                 var b = buttons[i];
                 var hb = UiKit.Button(_hud, Texts.T(b.key), UiKit.Primary, () => b.open(), 30);
                 hb.GetComponent<RectTransform>()
-                    .Place(new Vector2(1, 1), new Vector2(1, 1), new Vector2(-230, -104 - i * 96), new Vector2(-16, -16 - i * 96));
+                    .Place(new Vector2(1, 1), new Vector2(1, 1), new Vector2(-230, -96 - i * 86), new Vector2(-16, -16 - i * 86)); // 10 buttons clear the chat button
                 if (b.key == "ui.explore") _exploreText = hb.GetComponentInChildren<Text>();
             }
             UiKit.Button(_hud, Texts.T("ui.chat"), UiKit.Good, ShowChat, 36).GetComponent<RectTransform>()
                 .Place(new Vector2(1, 0), new Vector2(1, 0), new Vector2(-300, 40), new Vector2(-40, 170));
+
+            // Phase 10: "go in / walk out" when standing at a door (E on PC)
+            _prompt = UiKit.Button(_hud, "", UiKit.Accent, () => _promptAction?.Invoke(), 32);
+            _prompt.GetComponent<RectTransform>().Place(new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(-260, 200), new Vector2(260, 300));
+            _promptText = _prompt.GetComponentInChildren<Text>();
+            _prompt.gameObject.SetActive(false);
+
+            // Phase 10: inside a home: decorate (my home) and walk out
+            _homeBar = UiKit.Rect("HomeBar", _hud).Place(new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(-330, 40), new Vector2(330, 150));
+            UiKit.Button(_homeBar, Texts.T("ui.decorate"), UiKit.Good, () => _s.Run(_s.StartDecoratingAsync), 30).GetComponent<RectTransform>()
+                .Place(new Vector2(0, 0), new Vector2(0.49f, 1));
+            UiKit.Button(_homeBar, "ออกจากบ้าน", UiKit.Muted, () => _s.Run(_s.LeaveHomeAsync), 30).GetComponent<RectTransform>()
+                .Place(new Vector2(0.51f, 0), new Vector2(1, 1));
+            _homeBar.gameObject.SetActive(false);
+        }
+
+        // ---------- first home (Phase 10) ----------
+
+        /// <summary>The door button: shown with text, hidden with null. Only rebuilt when the text changes.</summary>
+        public void SetPrompt(string text, Action action)
+        {
+            _promptAction = action;
+            if (text == _promptShown) return;
+            _promptShown = text;
+            _prompt.gameObject.SetActive(text != null);
+            if (text == null) return;
+            _promptText.text = text + (action != null && !Application.isMobilePlatform ? "  [E]" : "");
+            _prompt.GetComponent<Image>().color = action != null ? UiKit.Accent : UiKit.Muted;
+        }
+
+        public void SetHomeMode(bool inHome, bool mine)
+        {
+            _homeBar.gameObject.SetActive(inHome);
+            _homeBar.GetChild(0).gameObject.SetActive(mine); // only the owner decorates
+        }
+
+        /// <summary>My home: claim it, its address, who may visit, go home / decorate, and friends' homes.</summary>
+        public void ShowHome()
+        {
+            var list = OpenModal(Texts.T("ui.home"));
+            Loading(list);
+            _s.Run(async () =>
+            {
+                var h = await _s.LoadMyHomeAsync();
+                UiKit.Clear(list);
+                if (!h.claimed)
+                {
+                    UiKit.Row(list, "ทุกคนได้บ้านหลังแรกฟรีในย่านบ้าน พร้อมเตียง โต๊ะ และกระถางต้นไม้ไว้แต่งบ้าน", 120);
+                    UiKit.RowButton(UiKit.Row(list, "<b>บ้านหลังแรกของคุณ</b>"), "รับบ้าน", UiKit.Good, () =>
+                    {
+                        CloseModal();
+                        _s.Run(_s.ClaimHomeAsync);
+                    }, 200);
+                    return;
+                }
+                UiKit.Row(list, "<b>" + HomePresenter.Address(h.plot) + "</b>\n<size=24>เฟอร์นิเจอร์ในบ้าน " + h.furniture.Count + " ชิ้น</size>");
+                var go = UiKit.Row(list, _s.CurrentHome != null && _s.CurrentHome.isMine ? "คุณอยู่ในบ้านตอนนี้" : "เดินกลับบ้าน");
+                if (_s.CurrentHome != null && _s.CurrentHome.isMine)
+                    UiKit.RowButton(go, Texts.T("ui.decorate"), UiKit.Good, () => { CloseModal(); _s.Run(_s.StartDecoratingAsync); }, 200);
+                else
+                    UiKit.RowButton(go, Texts.T("ui.go_home"), UiKit.Good, () => { CloseModal(); _s.Run(() => _s.EnterHomeAsync(_s.Profile.userId)); }, 200);
+
+                UiKit.Row(list, "<b>ใครเข้าบ้านได้บ้าง</b>  <size=24>(ตอนนี้: " + HomePresenter.PolicyName(h.visitPolicy) + ")</size>", 70);
+                foreach (var policy in HomePresenter.Policies)
+                {
+                    var pol = policy;
+                    var row = UiKit.Row(list, HomePresenter.PolicyName(pol) + "\n<size=22>" + HomePresenter.PolicyBlurb(pol) + "</size>");
+                    if (pol == h.visitPolicy) UiKit.RowButton(row, "✓ ใช้อยู่", UiKit.Muted, () => { }, 160);
+                    else UiKit.RowButton(row, "เลือก", UiKit.Primary, () => _s.Run(async () =>
+                    {
+                        await _s.Api.SetHomeVisitPolicyAsync(pol);
+                        Toast("ตั้งเป็น " + HomePresenter.PolicyName(pol) + " แล้ว");
+                        ShowHome();
+                    }), 160);
+                }
+
+                var friends = await _s.Api.GetFriendsAsync();
+                UiKit.Row(list, "<b>บ้านเพื่อน</b>", 60);
+                if (friends.Count == 0) UiKit.Row(list, "<size=24>มีเพื่อนแล้วจะไปเยี่ยมบ้านเพื่อนได้ (ถ้าเพื่อนเปิดให้เยี่ยม)</size>", 70);
+                foreach (var f in friends)
+                {
+                    var row = UiKit.Row(list, f.displayName + "  Lv." + f.level);
+                    if (!f.canVisitHome)
+                    {
+                        UiKit.RowButton(row, "ยังไม่เปิด", UiKit.Muted, () => { }, 160);
+                        continue;
+                    }
+                    var fid = f.userId;
+                    UiKit.RowButton(row, "ไปเยี่ยม", UiKit.Primary, () =>
+                    {
+                        CloseModal();
+                        _s.Run(() => _s.EnterHomeAsync(fid));
+                    }, 160);
+                }
+            });
+        }
+
+        // ---- decorate toolbar ----
+
+        public void ShowDecorate()
+        {
+            CloseModal();
+            HideDecorate();
+            Joystick.gameObject.SetActive(false);
+            _homeBar.gameObject.SetActive(false);
+            _decorate = UiKit.Box("Decorate", _hud, new Color(1, 1, 1, 0.92f)).Round(true).rectTransform
+                .Place(new Vector2(0, 0), new Vector2(1, 0), new Vector2(16, 16), new Vector2(-16, 330));
+            _decorateHint = UiKit.Label(_decorate, "", 28);
+            _decorateHint.rectTransform.Place(new Vector2(0, 0.78f), new Vector2(0.62f, 1), new Vector2(24, 0), new Vector2(0, -6));
+            _saveButton = UiKit.Button(_decorate, "บันทึก", UiKit.Good, () => _s.Run(_s.SaveDecoratingAsync), 30);
+            _saveButton.GetComponent<RectTransform>().Place(new Vector2(0.64f, 0.74f), new Vector2(0.82f, 1), new Vector2(0, 0), new Vector2(-6, -8));
+            UiKit.Button(_decorate, "ยกเลิก", UiKit.Muted, () => _s.StopDecorating(true), 30).GetComponent<RectTransform>()
+                .Place(new Vector2(0.82f, 0.74f), new Vector2(1, 1), new Vector2(6, 0), new Vector2(-12, -8));
+            _bagRow = HRow(_decorate, new Vector2(0, 0.38f), new Vector2(1, 0.72f));
+            _heldRow = HRow(_decorate, new Vector2(0, 0.02f), new Vector2(1, 0.36f));
+            RefreshDecorate();
+        }
+
+        public void HideDecorate()
+        {
+            if (_decorate != null) UnityEngine.Object.Destroy(_decorate.gameObject);
+            _decorate = null;
+            Joystick.gameObject.SetActive(true);
+            if (_s.CurrentHome != null) SetHomeMode(true, _s.CurrentHome.isMine);
+        }
+
+        /// <summary>Redraws the bag (what can be placed) and the buttons for the piece in hand.</summary>
+        public void RefreshDecorate()
+        {
+            var e = _s.Editor;
+            if (_decorate == null || e == null) return;
+            _decorateHint.text = _s.Saving ? "กำลังบันทึก..." : HomePresenter.EditHint(e);
+            _decorateHint.color = e.Held != null && !e.HeldFits ? UiKit.Danger : UiKit.Ink;
+            _saveButton.interactable = !_s.Saving && e.Dirty;
+            UiKit.Clear(_bagRow);
+            UiKit.Clear(_heldRow);
+            var items = e.BagItems.ToList();
+            if (items.Count == 0) UiKit.Label(_bagRow, "<size=24>กระเป๋าเฟอร์นิเจอร์ว่าง ซื้อเพิ่มได้ที่ร้านค้า</size>", 24).gameObject.AddComponent<LayoutElement>().preferredWidth = 700;
+            foreach (var id in items)
+            {
+                var itemId = id;
+                var fp = e.Footprint(itemId);
+                RowButton(_bagRow, Texts.T(itemId) + " ×" + e.InBag(itemId) + "\n<size=20>" + fp[0] + "×" + fp[1] + " ช่อง</size>", e.Held == null ? UiKit.Primary : UiKit.Muted, () =>
+                {
+                    if (_s.Editor != null && _s.Editor.TakeFromBag(itemId)) _s.EditorChanged();
+                }, 230);
+            }
+            if (e.Held == null)
+            {
+                UiKit.Label(_heldRow, "<size=24>แตะของในห้องเพื่อหยิบขึ้นมาย้าย หมุน หรือเก็บ</size>", 24).gameObject.AddComponent<LayoutElement>().preferredWidth = 900;
+                return;
+            }
+            UiKit.Label(_heldRow, "ในมือ: " + Texts.T(e.Held.ItemId), 28).gameObject.AddComponent<LayoutElement>().preferredWidth = 330;
+            RowButton(_heldRow, "หมุน ⟳", UiKit.Primary, () => { _s.Editor?.RotateHeld(); _s.EditorChanged(); }, 170);
+            RowButton(_heldRow, "วาง", e.HeldFits ? UiKit.Good : UiKit.Muted, () =>
+            {
+                if (_s.Editor == null) return;
+                if (!_s.Editor.Drop()) Toast(Texts.T("HOME_PLACEMENT_INVALID"));
+                _s.EditorChanged();
+            }, 150);
+            RowButton(_heldRow, "เก็บเข้ากระเป๋า", UiKit.Accent, () => { _s.Editor?.PutHeldInBag(); _s.EditorChanged(); }, 230);
+            RowButton(_heldRow, "ไม่เอาแล้ว", UiKit.Muted, () => { _s.Editor?.CancelHeld(); _s.EditorChanged(); }, 180);
+        }
+
+        private static RectTransform HRow(Transform parent, Vector2 min, Vector2 max)
+        {
+            var view = UiKit.Rect("HScroll", parent).Place(min, max, new Vector2(16, 0), new Vector2(-16, 0));
+            view.gameObject.AddComponent<RectMask2D>();
+            view.gameObject.AddComponent<Image>().color = new Color(0, 0, 0, 0.001f); // catches drags for scrolling
+            var scroll = view.gameObject.AddComponent<ScrollRect>();
+            scroll.vertical = false;
+            var content = UiKit.Rect("Content", view);
+            content.anchorMin = new Vector2(0, 0);
+            content.anchorMax = new Vector2(0, 1);
+            content.pivot = new Vector2(0, 0.5f);
+            content.offsetMin = Vector2.zero;
+            content.offsetMax = Vector2.zero;
+            var h = content.gameObject.AddComponent<HorizontalLayoutGroup>();
+            h.spacing = 10;
+            h.padding = new RectOffset(4, 4, 6, 6);
+            h.childAlignment = TextAnchor.MiddleLeft;
+            h.childControlWidth = true;
+            h.childControlHeight = true;
+            h.childForceExpandWidth = false;
+            content.gameObject.AddComponent<ContentSizeFitter>().horizontalFit = ContentSizeFitter.FitMode.PreferredSize;
+            scroll.content = content;
+            scroll.viewport = view;
+            return content;
+        }
+
+        private static void RowButton(RectTransform row, string text, Color color, Action onClick, float width)
+        {
+            var b = UiKit.Button(row, text, color, onClick, 26);
+            var le = b.gameObject.AddComponent<LayoutElement>();
+            le.preferredWidth = width;
+            le.minWidth = width;
         }
 
         public void ShowHud()
@@ -556,6 +761,7 @@ namespace HappyWorld.Unity.UI
                             var ack = await _s.Rt.InviteFriendAsync(fid, "JOIN_ZONE");
                             Toast(ack.Ok ? "ส่งคำชวนแล้ว" : Texts.Error(ack.ErrorCode, ack.ErrorMessage));
                         }), 140);
+                    UiKit.RowButton(row, "ไปบ้าน", UiKit.Good, () => { CloseModal(); _s.Run(() => _s.EnterHomeAsync(fid)); }, 130);
                     UiKit.RowButton(row, "ลบ", UiKit.Muted, () => _s.Run(async () => { await _s.Api.RemoveFriendAsync(fid); ShowFriends(); }), 100);
                 }
 
@@ -580,6 +786,12 @@ namespace HappyWorld.Unity.UI
                     CloseModal();
                 }));
             else UiKit.Row(list, "♥ เป็นเพื่อนกันแล้ว");
+            // Phase 10: the server decides whether their home is open to me
+            UiKit.RowButton(UiKit.Row(list, "ไปเยี่ยมบ้าน"), "ไปเลย", UiKit.Primary, () =>
+            {
+                CloseModal();
+                _s.Run(() => _s.EnterHomeAsync(p.UserId));
+            });
             UiKit.RowButton(UiKit.Row(list, "ไม่อยากเห็นผู้เล่นนี้อีก"), Texts.T("ui.block"), UiKit.Danger, () => _s.Run(async () =>
             {
                 await _s.Api.BlockAsync(p.UserId);

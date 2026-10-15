@@ -196,3 +196,32 @@ curl -s $API/city/growth -H "authorization: Bearer $TOKEN"
 ช่างเลเวล 4, 7, 10 ได้เพิ่มครั้งละ 1 ชิ้น สินค้าเหล่านี้เป็น `craftOnly`: `POST /businesses/:id/restock` ตอบ `PRODUCT_CRAFT_ONLY` และ `POST /minigames/start` ตอบ `NO_MINIGAME_FOR_PRODUCT` ต้นทุนต่อชิ้นของร้าน = ค่าแรง ÷ จำนวนชิ้น (วัตถุดิบจ่ายด้วยเวลา เหมือนของจากมินิเกม) ค่าแรงลงเป็นรายจ่ายของร้าน
 
 ทดสอบบนเครื่อง: `EXPEDITION_TIME_SCALE=0.02` ทำให้ทริป 3 นาทีเหลือ 4 วินาที (ห้ามใช้ใน production ระบบไม่ยอมเปิด)
+
+## บ้านหลังแรก (Phase 10)
+
+ผู้เล่นทุกคนมีแถว `player_homes` ตั้งแต่สมัคร แต่ยังไม่มีที่ดินจนกว่าจะกด "รับบ้าน" ซึ่งได้ที่ดินว่างแปลงแรกของย่านบ้านในช่วงอายุเดียวกัน พร้อมเฟอร์นิเจอร์ต้อนรับ (เตียงเดี่ยว 1, โต๊ะไม้ 1, กระถางต้นไม้ 2) เข้ากระเป๋า กติกาอยู่ใน `packages/shared-contracts/src/home.ts`
+
+ห้องเป็นตาราง `gridWidth × gridHeight` ช่อง (เริ่มต้น 8×8, ช่องละ 1.5 หน่วย) เฟอร์นิเจอร์แต่ละชิ้นกินพื้นที่ `footprint` [กว้าง, ลึก] จาก `items.metadata` (ไม่ระบุ = 1×1) หมุนได้ 0/90/180/270 วางได้ไม่เกิน 40 ชิ้น
+
+**ใครเป็นเจ้าของเฟอร์นิเจอร์**: ของที่มี = จำนวนในกระเป๋า (`player_inventory`) + ชิ้นที่วางในบ้าน (`home_furniture`) วางของ = ledger `HOME_PLACE` ลดในกระเป๋า เก็บของ = `HOME_REMOVE` คืนเข้ากระเป๋า ทั้งหมดผ่าน `InventoryService` ของ Phase 9 ใน transaction เดียวกับการเปลี่ยนผังบ้าน ของจึงไม่งอกและไม่หาย
+
+| Method | Path | หมายเหตุ |
+|---|---|---|
+| GET | `/homes/me` | บ้านของฉัน: `{homeId, owner, isMine, isFriend, claimed, claimedAt, plot {plotNumber, street, slot, x, y, door, facing}, visitPolicy, gridWidth, gridHeight, interior, layoutVersion, furniture[{id, itemId, x, y, rotation, footprint}]}` ยังไม่รับบ้าน = `claimed: false`, `plot: null` |
+| POST | `/homes/me/claim` | รับบ้าน (ครั้งเดียว) คืน `{claimed, plotNumber, gift[{itemId, quantity}], home}` รับซ้ำ = `HOME_ALREADY_CLAIMED` 409 กดพร้อมกันหลายครั้งได้บ้านหลังเดียว ของขวัญครั้งเดียว |
+| GET | `/homes/me/furniture` | เฟอร์นิเจอร์ที่ฉันมี: `[{itemId, nameKey, footprint, inBag, placed}]` |
+| PUT | `/homes/me/layout` | ต้องมี `Idempotency-Key` บันทึกผังทั้งห้อง `{baseVersion, pieces[{id?, itemId, x, y, rotation}]}` ชิ้นที่มี `id` = ของเดิม (ย้าย/หมุน), ไม่มี `id` = หยิบจากกระเป๋า, ชิ้นเดิมที่ไม่ส่งมา = เก็บเข้ากระเป๋า คืน `{replayed, placed, moved, removed, version, home}` |
+| PATCH | `/homes/me/settings` | `{visitPolicy: PRIVATE \| FRIENDS \| PUBLIC}` (เริ่มต้น FRIENDS) ผู้มาเยี่ยมที่หมดสิทธิ์ถูกพาออกทันที |
+| GET | `/homes/district?street=` | ย่านบ้านของช่วงอายุฉัน ถนนละ 12 แปลง: `{street, streets, myPlot, plots[{plotNumber, slot, x, y, door, facing, taken, owner, isMine, isFriend, visitPolicy, canVisit}]}` เจ้าของที่บล็อกกันแสดงเป็นบ้านไม่มีชื่อ |
+| GET | `/homes/:ownerId` | ดูบ้านคนอื่น (สิทธิ์ตามด้านล่าง) ไม่มีวันเห็น `visitPolicy` ของบ้านคนอื่น |
+
+**สิทธิ์เข้าบ้าน** (`HomeAccessService` ใช้ร่วมกันทั้ง REST และ realtime): เจ้าของเข้าได้เสมอ, ยังไม่รับบ้าน/ต่างช่วงอายุ/บล็อกกัน/บัญชีไม่ active = 404 `NOT_FOUND` (ไม่บอกว่ามีบ้านอยู่), `PRIVATE` หรือ `FRIENDS` แต่ไม่ใช่เพื่อน = 403 `HOME_VISIT_NOT_ALLOWED` ผู้มาเยี่ยมแก้บ้านคนอื่นไม่ได้เลย: ทุก endpoint ที่เขียนเป็น `/homes/me/*` เท่านั้น
+
+**ข้อผิดพลาดตอนบันทึกผัง**
+- `HOME_NOT_CLAIMED` 409 ยังไม่รับบ้าน
+- `HOME_LAYOUT_CONFLICT` 409 บ้านถูกแก้จากเครื่องอื่นหลังเริ่มจัด (`baseVersion` ไม่ตรง) คืน `layoutVersion` ล่าสุด ให้โหลดใหม่
+- `HOME_PLACEMENT_INVALID` 400 `{problem: OUT_OF_BOUNDS | OVERLAP | BAD_ROTATION | TOO_MANY | UNKNOWN_PIECE | NOT_FURNITURE, index?}`
+- `ITEM_NOT_OWNED` 409 ของในกระเป๋าไม่พอ (เช่น ขายไปแล้วระหว่างจัดบ้าน)
+- `IDEMPOTENCY_KEY_REUSED` 409 ใช้ key เดิมกับผังอื่น ส่ง key เดิมกับผังเดิมซ้ำ = ได้ผลเดิม (`replayed: true`) ไม่วางซ้ำ
+
+จำกัดความถี่: เขียน (`claim`, `layout`, `settings`) `RATE_LIMIT_HOME_WRITES_PER_MINUTE` (30/นาที), ดูบ้านคนอื่น `RATE_LIMIT_HOME_VISITS_PER_MINUTE` (60/นาที) ทุกการเขียนมี audit log: `home.claim`, `home.layout_save`, `home.visit_policy`

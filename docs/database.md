@@ -80,7 +80,14 @@ Schema: [`apps/backend/prisma/schema.prisma`](../apps/backend/prisma/schema.pris
 - `expeditions`: หนึ่งแถวต่อหนึ่งทริป `seed` ไม่เคยส่งออกจาก server, `explorer_level` ตอนออกเดินทาง (ผลไม่เปลี่ยนแม้เลเวลขึ้นระหว่างทาง), `result` JSON เก็บตอน claim ให้เรียกซ้ำได้เรื่องเดิม partial unique index `expeditions_one_active_per_user` (user_id) WHERE claimed_at IS NULL = ไปได้ทีละทริป CHECK site/plan และ ends_at > started_at
 - วัตถุดิบ 9 ชนิดเป็นแถวใน `items` (id `mat_<code>`, category MATERIAL, ไม่มีราคา จึงไม่โผล่ในร้านค้า) seed สร้างให้
 
-## ข้อควรรู้
+## Migration ของ Phase 10 (`*_phase10_homes`)
+
+- ตาราง `player_homes` และ `home_furniture` มีตั้งแต่ migration แรก (ยังไม่ถูกใช้) Phase 10 ใช้ของเดิม ไม่สร้างตารางใหม่
+- `player_homes` เพิ่ม `plot_age_band`, `plot_number`, `claimed_at` (null = ยังไม่รับบ้าน), `visit_policy` (enum `HomeVisitPolicy`, เริ่มต้น FRIENDS), `layout_save_key` (idempotency key ของการบันทึกผังล่าสุด) partial unique index `player_homes_plot_key` (plot_age_band, plot_number) = ที่ดินแปลงเดียวมีเจ้าของคนเดียว CHECK: ข้อมูลที่ดินครบหรือว่างพร้อมกัน, plot ≥ 0, grid 1..64, layout_version ≥ 0
+- `home_furniture` เพิ่ม CHECK x, y ≥ 0
+- `InventoryTransactionType` เพิ่ม `HOME_PLACE`, `HOME_REMOVE`, `HOME_STARTER_GIFT`
+- ความปลอดภัยตอนพร้อมกัน: รับบ้านล็อกด้วย advisory lock ต่อช่วงอายุ, บันทึกผังล็อกแถวบ้าน `FOR UPDATE` + `layout_version` (optimistic)
+
 
 - `wallet_transactions` ลบไม่ได้โดยออกแบบ การลบบัญชีผู้เล่น (สิทธิ์ตาม PDPA) ให้ทำแบบ anonymize/soft delete (`users.status = DELETED`, ล้างอีเมลและชื่อ) แทนการ hard delete
 - ยอดเงินเป็น `Int` (หน่วยเต็ม) ไม่มีทศนิยม ไม่มีปัญหา floating point

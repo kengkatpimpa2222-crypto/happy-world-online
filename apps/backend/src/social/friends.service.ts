@@ -146,7 +146,15 @@ export class FriendsService {
   async list(userId: string) {
     const rows = await this.prisma.friend.findMany({
       where: { userId },
-      include: { friend: { select: { id: true, profile: { select: { ...PROFILE_SELECT, friendCode: true } } } } },
+      include: {
+        friend: {
+          select: {
+            id: true,
+            profile: { select: { ...PROFILE_SELECT, friendCode: true } },
+            home: { select: { claimedAt: true, visitPolicy: true } },
+          },
+        },
+      },
       orderBy: { createdAt: 'asc' },
     });
     const online = await this.presence.getMany(rows.map((r) => r.friendId));
@@ -156,6 +164,8 @@ export class FriendsService {
       friendsSince: r.createdAt,
       online: online.has(r.friendId),
       zone: online.get(r.friendId)?.zone ?? null,
+      // The friends list needs only a yes/no. It never receives the owner's setting or home contents.
+      canVisitHome: r.friend.home?.claimedAt != null && r.friend.home.visitPolicy !== 'PRIVATE',
     }));
   }
 
@@ -166,6 +176,8 @@ export class FriendsService {
       const deleted = await this.deleteFriendship(tx, userId, friendId);
       if (deleted > 0) await this.audit.log({ actorUserId: userId, action: 'friends.removed', targetType: 'user', targetId: friendId }, tx);
     });
+    // Phase 10: a friends-only home is closed to an ex-friend straight away
+    await this.realtime.homeAccessChanged([userId, friendId]);
   }
 
   async deleteFriendship(tx: Tx, a: string, b: string): Promise<number> {
