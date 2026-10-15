@@ -35,6 +35,8 @@ export const ITEMS: {
   { id: 'furn_fest_flower_arch', category: 'FURNITURE', priceGold: null, priceGems: null, metadata: { footprint: [2, 1], festival: 'FLOWER' } },
   { id: 'furn_fest_food_cart', category: 'FURNITURE', priceGold: null, priceGems: null, metadata: { footprint: [2, 1], festival: 'STREET_FOOD' } },
   { id: 'furn_fest_lantern', category: 'FURNITURE', priceGold: null, priceGems: null, metadata: { footprint: [1, 1], festival: 'LANTERN' } },
+  // Phase 11: day-7 check-in gift, never sold
+  { id: 'furn_nang_kwak', category: 'FURNITURE', priceGold: null, priceGems: null, metadata: { footprint: [1, 1], source: 'DAILY_CHECKIN' } },
   // materials (Phase 9): found on expeditions, used for crafting; never sold in the store
   ...MATERIAL_CODES.map((code) => ({ id: materialItemId(code), category: 'MATERIAL' as const, priceGold: null, priceGems: null, metadata: { material: code } })),
 ];

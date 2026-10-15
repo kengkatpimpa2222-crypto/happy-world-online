@@ -134,3 +134,13 @@ export function setCityWorld(app: INestApplication, w: { hour: number | null; we
   svc.weatherOverride = w.weather;
   return svc;
 }
+
+// ---------- Phase 11 helpers ----------
+import { DailyRewardsService } from '../src/quests/daily-rewards.service';
+
+/** Pins the daily-reward clock (check-in day, mission day/week) to `iso`, whatever day the tests really run on. */
+export function setDailyClock(app: INestApplication, iso: string): DailyRewardsService {
+  const svc = app.get(DailyRewardsService);
+  svc.clockOffsetMs = Date.parse(iso) - Date.now();
+  return svc;
+}

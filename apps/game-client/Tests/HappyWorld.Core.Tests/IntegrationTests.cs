@@ -301,6 +301,34 @@ namespace HappyWorld.Core.Tests
         }
 
         [Fact]
+        public async Task DailyCheckinOnceAndMissionsFromServerTime()
+        {
+            if (Url == null) return;
+            var api = await NewGuest();
+            var st = await api.GetDailyAsync();
+            Assert.False(st.checkin.claimedToday);
+            Assert.Equal(7, st.checkin.track.Count);
+            Assert.Equal(3, st.daily.missions.Count(m => !m.fromPreviousPeriod));
+            Assert.Equal(4, st.weekly.missions.Count);
+            Assert.True(st.checkin.nextResetAt > st.now);
+            Assert.StartsWith(DailyPresenter.LoginNudge(st).Substring(0, 6), "เช็กอินวันนี้รับ");
+
+            var wallet = await api.GetWalletAsync();
+            var r = await api.CheckinAsync();
+            Assert.Equal(st.checkin.todayStep, r.step);
+            Assert.Equal(wallet.Gold + r.rewards.gold, r.wallet["GOLD"]);
+            var again = await Assert.ThrowsAsync<ApiException>(() => api.CheckinAsync());
+            Assert.Equal("CHECKIN_ALREADY_CLAIMED", again.Code);
+
+            var after = await api.GetDailyAsync();
+            Assert.True(after.checkin.claimedToday);
+            Assert.Equal(1, after.weekly.missions.First(m => m.id == "w_visit_4").progress);
+            var notDone = after.daily.missions.First();
+            var e = await Assert.ThrowsAsync<ApiException>(() => api.ClaimMissionAsync(notDone.periodKey, notDone.id));
+            Assert.Equal("MISSION_NOT_COMPLETED", e.Code);
+        }
+
+        [Fact]
         public async Task BadTokenIsRefused()
         {
             if (Url == null) return;

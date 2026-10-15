@@ -56,6 +56,9 @@ namespace HappyWorld.Unity
         private bool _festivalLoading;
         private FestivalDecor _decor;
         private const float FestivalResyncSeconds = 60f;
+        // Phase 11: daily check-in and missions
+        public readonly DailyTracker Daily = new DailyTracker();
+        private bool _dailyLoading;
         // Phase 7: the living city (time of day, weather, city projects)
         public CityNow CityNow { get; private set; }
         public CityGrowth Growth { get; private set; }
@@ -293,6 +296,7 @@ namespace HappyWorld.Unity
             RefreshFestival();
             RefreshCityNow();
             RefreshGrowth();
+            RefreshDaily();
             Run(ShowWelcomeBackReportAsync);
             Trips.Resync(Clock); // reopened the app: load the trip that kept going while it was closed
         }
@@ -915,6 +919,49 @@ namespace HappyWorld.Unity
             if (untilEdge > 0 && untilEdge < FestivalResyncSeconds) _festivalRefreshAt = Time.time + untilEdge;
         }
 
+        // ---------- daily rewards & missions (Phase 11) ----------
+
+        /// <summary>The server's clock (UTC) as of the last GET /daily.</summary>
+        public DateTime DailyNow => Daily.ServerNow(Clock);
+
+        /// <summary>
+        /// Re-reads GET /daily in the background (HUD badge). Quiet on failure: the badge is a nicety, so a lost
+        /// read just tries again shortly instead of toasting an error over the game.
+        /// </summary>
+        public async void RefreshDaily()
+        {
+            if (_dailyLoading || Api == null) return;
+            _dailyLoading = true;
+            try
+            {
+                var st = await Api.GetDailyAsync();
+                OnDaily(st);
+                // a gentle reminder once a day, never a pop-up that blocks play
+                if (Daily.TakeNudge() && !_ui.ModalOpen)
+                {
+                    var line = DailyPresenter.LoginNudge(st);
+                    if (line != null) _ui.Toast(line, Texts.T("ui.checkin"), _ui.ShowDaily);
+                }
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning("GET /daily failed: " + e.Message);
+                Daily.Failed(Clock);
+            }
+            finally
+            {
+                _dailyLoading = false;
+            }
+        }
+
+        /// <summary>Applies a fresh daily state (also called by the daily panel).</summary>
+        public void OnDaily(DailyState st)
+        {
+            if (st == null) return;
+            Daily.Apply(st, Clock);
+            _ui.SetDaily(st);
+        }
+
         // ---------- living city (Phase 7) ----------
 
         /// <summary>The city's Bangkok hour now (server hour plus the time since it was read).</summary>
@@ -988,6 +1035,7 @@ namespace HappyWorld.Unity
             Rt = null;
             Festival = null;
             _festivalRefreshAt = -1f;
+            Daily.Clear();
             _decor = null;
             CityNow = null;
             Growth = null;
@@ -1032,6 +1080,7 @@ namespace HappyWorld.Unity
             {
                 if (!_tripCheckRunning && Trips.CheckDue(Clock)) CheckTripAsync();
                 _ui.TickTrip(Clock);
+                if (!_dailyLoading && Daily.Due(Clock)) RefreshDaily();
             }
             if (Rt == null) return;
             Rt.Pump();

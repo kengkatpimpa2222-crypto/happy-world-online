@@ -91,3 +91,11 @@ Schema: [`apps/backend/prisma/schema.prisma`](../apps/backend/prisma/schema.pris
 
 - `wallet_transactions` ลบไม่ได้โดยออกแบบ การลบบัญชีผู้เล่น (สิทธิ์ตาม PDPA) ให้ทำแบบ anonymize/soft delete (`users.status = DELETED`, ล้างอีเมลและชื่อ) แทนการ hard delete
 - ยอดเงินเป็น `Int` (หน่วยเต็ม) ไม่มีทศนิยม ไม่มีปัญหา floating point
+
+## Migration ของ Phase 11 (`*_phase11_daily_rewards`)
+
+- enum `WalletTransactionType` และ `InventoryTransactionType` เพิ่ม `DAILY_CHECKIN`, `MISSION_REWARD` (รางวัลทั้งหมดผ่าน ledger เดิม)
+- `player_checkins` (1 แถวต่อผู้เล่น): ขั้นล่าสุดบนเส้นทาง 7 วัน (`step` 1-7), วันเช็กอินล่าสุด (`last_day` วันไทย), จำนวนวันรวม การเช็กอินคือ `INSERT ... ON CONFLICT DO UPDATE ... WHERE last_day < today` จึงผ่านได้ครั้งเดียวต่อวัน
+- `daily_checkins` (PK `user_id, bkk_day`): ประวัติเช็กอิน append-only (trigger ห้าม UPDATE) กันรับซ้ำชั้นที่สอง
+- `mission_progress` (PK `user_id, period_key, mission_id`): ความคืบหน้าภารกิจ `period_key` = `D<วัน>` หรือ `W<วันจันทร์>` แถวเกิดครั้งแรกที่ผู้เล่นทำสิ่งที่ภารกิจนับ CHECK: `progress` อยู่ระหว่าง 0 ถึง `target`, ที่รับแล้วต้องครบเป้า
+- นิยามภารกิจไม่ได้อยู่ในฐานข้อมูล อยู่ใน `shared-contracts/src/daily.ts` (เปลี่ยนรางวัลได้โดยไม่ต้อง migrate)

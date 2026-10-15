@@ -225,3 +225,24 @@ curl -s $API/city/growth -H "authorization: Bearer $TOKEN"
 - `IDEMPOTENCY_KEY_REUSED` 409 ใช้ key เดิมกับผังอื่น ส่ง key เดิมกับผังเดิมซ้ำ = ได้ผลเดิม (`replayed: true`) ไม่วางซ้ำ
 
 จำกัดความถี่: เขียน (`claim`, `layout`, `settings`) `RATE_LIMIT_HOME_WRITES_PER_MINUTE` (30/นาที), ดูบ้านคนอื่น `RATE_LIMIT_HOME_VISITS_PER_MINUTE` (60/นาที) ทุกการเขียนมี audit log: `home.claim`, `home.layout_save`, `home.visit_policy`
+
+## รางวัลรายวันและภารกิจ (Phase 11)
+
+ตารางรางวัลและภารกิจอยู่ใน `packages/shared-contracts/src/daily.ts` วันเปลี่ยนตอนเที่ยงคืนเวลาไทย (UTC+7) สัปดาห์เริ่มวันจันทร์ ใช้นาฬิกาของ server เท่านั้น client ไม่เคยบอกว่าวันนี้วันอะไร
+
+- **เช็กอิน 7 วัน**: เช็กอินวันละครั้ง แต่ละครั้งเลื่อนไปหนึ่งขั้น ขาดวันไหน**ไม่รีเซ็ต** (ไม่บังคับให้เข้าทุกวัน) ครบขั้น 7 ได้ "ตุ๊กตานางกวัก" (`furn_nang_kwak` ไม่มีขายในร้าน) แล้ววนกลับขั้น 1
+- **ภารกิจรายวัน**: วันละ 3 ภารกิจ สุ่มจาก pool 9 แบบด้วย seed (ผู้เล่น + วัน) จึงไม่เปลี่ยนระหว่างวัน นับจากการกระทำจริงในเกม (ขายของ ต้อนรับลูกค้า ทำกำไร เติมสต็อก มินิเกม ออกสำรวจ เก็บวัตถุดิบ แปรรูป จัดบ้าน) ไม่มีภารกิจ "เพิ่มเพื่อน" (ไม่กดดันเด็กให้เพิ่มคนแปลกหน้า)
+- **ภารกิจรายสัปดาห์**: เช็กอิน 4 วัน (ไม่ต้องติดกัน), รับภารกิจรายวัน 10 ครั้ง, ขายของ 100 ชิ้น, ออกสำรวจ 5 ครั้ง
+- ภารกิจที่ทำสำเร็จแล้วแต่ยังไม่กดรับ รับได้ถึงสิ้นวัน/สัปดาห์ถัดไป (ทำเสร็จตอน 23:59 ก็ไม่เสียรางวัล)
+
+| Method | Path | หมายเหตุ |
+|---|---|---|
+| GET | `/daily` | `{now, checkin {today, claimedToday, todayStep, totalDays, nextResetAt, track[{step, gold, item, state: CLAIMED\|TODAY\|UPCOMING}]}, daily {periodKey, endsAt, missions[]}, weekly {periodKey, endsAt, missions[]}, claimable}` แต่ละภารกิจ `{id, periodKey, period, objective, target, progress, status, rewards {gold, xp, item}, titleTh, titleEn, fromPreviousPeriod}` |
+| POST | `/daily/checkin` | เช็กอินวันนี้ คืน `{day, step, totalDays, rewards {gold, item}, nextResetAt, wallet}` ซ้ำในวันเดียว = `CHECKIN_ALREADY_CLAIMED` 409 |
+| POST | `/daily/missions/claim` | `{periodKey: "D2026-10-15" \| "W2026-10-12", missionId}` คืน `{periodKey, missionId, rewards, level, wallet}` |
+
+**ข้อผิดพลาด**: `CHECKIN_ALREADY_CLAIMED` 409, `MISSION_NOT_COMPLETED` 409 `{progress, target}`, `MISSION_ALREADY_CLAIMED` 409, `MISSION_EXPIRED` 409 (เกินรอบก่อนหน้า หรือรอบที่แล้วแต่ทำไม่เสร็จ), `MISSION_NOT_FOUND` 404 (ไม่ใช่ภารกิจของเรา/ไม่มี/รอบในอนาคต)
+
+**กันรับซ้ำ**: เช็กอินเป็น upsert แบบมีเงื่อนไข `last_day < today` แถวเดียว (กด 10 ครั้งพร้อมกันผ่านครั้งเดียว), ตาราง `daily_checkins` (PK ผู้เล่น+วัน) และ idempotency key ของ ledger (`checkin:<day>:GOLD`, `mission:<periodKey>:<id>:GOLD`) เป็นด่านที่ 2 และ 3 การรับภารกิจเปลี่ยน `COMPLETED → CLAIMED` แบบมีเงื่อนไข Gold ผ่าน `WalletService` (`DAILY_CHECKIN`, `MISSION_REWARD`) ไอเทมผ่าน `InventoryService` (ledger `inventory_transactions` ชนิดเดียวกัน) audit log `daily.checkin`, `mission.claimed`
+
+Dev/QA: `DAILY_CLOCK_OFFSET_HOURS` เลื่อนนาฬิการางวัลรายวัน (เช่น 24 = ลองเช็กอินพรุ่งนี้) ห้ามใช้ใน production (server ไม่ยอมเริ่ม)

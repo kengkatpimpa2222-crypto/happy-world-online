@@ -8,3 +8,5 @@ export * from './city-growth';
 export * from './minigame';
 export * from './adventure';
 export * from './home';
+export * from './quest-objectives';
+export * from './daily';

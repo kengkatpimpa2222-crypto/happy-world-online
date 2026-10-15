@@ -245,6 +245,15 @@ namespace HappyWorld.Unity.World
                     P(t, PrimitiveType.Cylinder, 0, 0.8f, 0, 0.06f, 0.8f, 0.06f, wood);
                     P(t, PrimitiveType.Sphere, 0, 1.7f, 0, 0.6f, 0.75f, 0.6f, new Color(1f, 0.45f, 0.3f));
                     break;
+                case "furn_nang_kwak":
+                    // Phase 11 day-7 gift: the beckoning lady on a red cushion, one hand raised to welcome luck in
+                    var gold = new Color(0.95f, 0.78f, 0.3f);
+                    P(t, PrimitiveType.Cube, 0, 0.1f, 0, w * 0.6f, 0.2f, d * 0.6f, new Color(0.8f, 0.2f, 0.2f));
+                    P(t, PrimitiveType.Cylinder, 0, 0.5f, 0, w * 0.38f, 0.32f, d * 0.38f, new Color(0.85f, 0.25f, 0.3f));
+                    P(t, PrimitiveType.Sphere, 0, 1f, 0, 0.32f, 0.32f, 0.32f, new Color(0.98f, 0.86f, 0.72f));
+                    P(t, PrimitiveType.Cylinder, 0, 1.24f, 0, 0.12f, 0.1f, 0.12f, gold);
+                    P(t, PrimitiveType.Cylinder, w * 0.2f, 0.95f, -d * 0.08f, 0.07f, 0.2f, 0.07f, gold).transform.localRotation = Quaternion.Euler(0, 0, -20);
+                    break;
                 default:
                     P(t, PrimitiveType.Cube, 0, 0.4f, 0, w * 0.8f, 0.8f, d * 0.8f, new Color(0.7f, 0.7f, 0.9f));
                     break;
