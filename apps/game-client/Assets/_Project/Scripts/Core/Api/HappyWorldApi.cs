@@ -184,6 +184,25 @@ namespace HappyWorld.Core.Api
         public Task<CraftResult> CraftAsync(string businessId, string recipe, int times, string idempotencyKey) =>
             SendAsync<CraftResult>("POST", "/crafting/craft", new { recipe, businessId, times }, idempotencyKey: idempotencyKey);
 
+        // ---------- First home (Phase 10) ----------
+        public Task<HomeView> GetMyHomeAsync() => SendAsync<HomeView>("GET", "/homes/me");
+        /// <summary>Once only; a second call answers HOME_ALREADY_CLAIMED (then just read GET /homes/me).</summary>
+        public Task<ClaimHomeResult> ClaimHomeAsync() => SendAsync<ClaimHomeResult>("POST", "/homes/me/claim", null);
+        public Task<List<FurnitureBagItem>> GetHomeFurnitureAsync() => SendAsync<List<FurnitureBagItem>>("GET", "/homes/me/furniture");
+        /// <summary>
+        /// Saves the whole layout. Pieces with an id are moved/turned, pieces without one come out of the bag, pieces left
+        /// out go back to the bag. <paramref name="baseVersion"/> is the layoutVersion the edit started from.
+        /// </summary>
+        /// <param name="idempotencyKey">One per Save tap; reuse it when retrying the same tap.</param>
+        public Task<SaveLayoutResult> SaveHomeLayoutAsync(int baseVersion, IEnumerable<HomeLayoutPiece> pieces, string idempotencyKey) =>
+            SendAsync<SaveLayoutResult>("PUT", "/homes/me/layout", new { baseVersion, pieces }, idempotencyKey: idempotencyKey);
+        /// <param name="visitPolicy">PRIVATE, FRIENDS or PUBLIC</param>
+        public Task<HomeView> SetHomeVisitPolicyAsync(string visitPolicy) => SendAsync<HomeView>("PATCH", "/homes/me/settings", new { visitPolicy });
+        public Task<HomeDistrict> GetHomeDistrictAsync(int? street = null) =>
+            SendAsync<HomeDistrict>("GET", "/homes/district" + (street.HasValue ? "?street=" + street.Value : ""));
+        /// <summary>The server checks age band, blocks, the owner's visit setting and friendship.</summary>
+        public Task<HomeView> VisitHomeAsync(string ownerId) => SendAsync<HomeView>("GET", "/homes/" + ownerId);
+
         // ---------- Friends / safety ----------
         public Task<FriendRequestResult> SendFriendRequestByCodeAsync(string friendCode) =>
             SendAsync<FriendRequestResult>("POST", "/friends/requests", new { friendCode = friendCode.Trim().ToUpperInvariant() });
@@ -266,6 +285,16 @@ namespace HappyWorld.Core.Api
             }
             throw new ApiException(r.Status, code, message, requestId);
         }
+    }
+
+    /// <summary>One piece as PUT /homes/me/layout expects it (id = null for a piece coming out of the bag).</summary>
+    public sealed class HomeLayoutPiece
+    {
+        public string id;
+        public string itemId;
+        public int x;
+        public int y;
+        public int rotation;
     }
 
     public static class IdempotencyKeys

@@ -188,6 +188,18 @@ namespace HappyWorld.Core.Localization
             ["shop_serve_customers"] = "ขายให้ลูกค้า 15 คน",
             ["festival_first_help"] = "ช่วยเมืองจัดเทศกาล",
             ["life_homemade_goods"] = "ทำของขายเอง 3 รอบ",
+            // first home (Phase 10)
+            ["ui.home"] = "บ้านของฉัน",
+            ["ui.go_home"] = "กลับบ้าน",
+            ["ui.decorate"] = "จัดบ้าน",
+            ["HOME_NOT_CLAIMED"] = "ยังไม่มีบ้าน รับบ้านหลังแรกก่อนนะ",
+            ["HOME_ALREADY_CLAIMED"] = "คุณมีบ้านแล้ว",
+            ["HOME_LAYOUT_CONFLICT"] = "บ้านถูกจัดจากเครื่องอื่นไปแล้ว โหลดแบบล่าสุดให้แล้ว ลองจัดใหม่อีกครั้งนะ",
+            ["HOME_PLACEMENT_INVALID"] = "วางตรงนี้ไม่ได้ (ชนของชิ้นอื่นหรือล้นห้อง)",
+            ["HOME_VISIT_NOT_ALLOWED"] = "เจ้าของบ้านยังไม่เปิดให้เข้าเยี่ยม",
+            ["HOME_FULL"] = "ในบ้านคนเยอะแล้ว รอสักครู่นะ",
+            ["IDEMPOTENCY_KEY_REUSED"] = "รายการนี้ถูกส่งไปแล้ว ลองใหม่อีกครั้ง",
+            ["home_first_furniture"] = "วางเฟอร์นิเจอร์ชิ้นแรก",
 
             // zones (nameKey from GET /city)
             ["zone.plaza"] = "ลานกลางเมือง",

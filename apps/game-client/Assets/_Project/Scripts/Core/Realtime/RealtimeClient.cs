@@ -120,6 +120,19 @@ namespace HappyWorld.Core.Realtime
         public string next;
     }
 
+    /// <summary>home:state — you are inside a home (Phase 10).</summary>
+    public sealed class HomeState
+    {
+        public string ownerId;
+        public string ownerName;
+        public bool isMine;
+        public string room;
+        public HomeInterior interior;
+        public int layoutVersion;
+        public ZonePoint you;
+        public List<RemotePlayerInfo> players = new List<RemotePlayerInfo>();
+    }
+
     /// <summary>festival:milestone — the whole city (same age band) reached a festival tier.</summary>
     public sealed class FestivalMilestone
     {
@@ -157,6 +170,11 @@ namespace HappyWorld.Core.Realtime
         public event Action<ShopUpdated> ShopUpdated;
         public event Action<FestivalMilestone> FestivalMilestone;
         public event Action<CityGrowthEvent> CityGrowth;
+        public event Action<HomeState> HomeState;
+        /// <summary>home:layout — (ownerId, layoutVersion): the owner saved; re-read the home.</summary>
+        public event Action<string, int> HomeLayoutChanged;
+        /// <summary>home:kicked — ownerId: you may no longer be in that home.</summary>
+        public event Action<string> HomeKicked;
         public event Action<string> ConnectError;
         public event Action<string> Disconnected;
 
@@ -185,6 +203,9 @@ namespace HappyWorld.Core.Realtime
             _io.On("shop:updated", p => ShopUpdated?.Invoke(p.ToObject<ShopUpdated>()));
             _io.On("festival:milestone", p => FestivalMilestone?.Invoke(p.ToObject<FestivalMilestone>()));
             _io.On("city:growth", p => CityGrowth?.Invoke(p.ToObject<CityGrowthEvent>()));
+            _io.On("home:state", p => HomeState?.Invoke(p.ToObject<HomeState>()));
+            _io.On("home:layout", p => HomeLayoutChanged?.Invoke((string)p?["ownerId"], (int?)p?["layoutVersion"] ?? 0));
+            _io.On("home:kicked", p => HomeKicked?.Invoke((string)p?["ownerId"]));
         }
 
         /// <summary>Opens the socket. Completion means the TCP/WebSocket is open; wait for <see cref="Ready"/> before joining a zone.</summary>
@@ -194,6 +215,10 @@ namespace HappyWorld.Core.Realtime
 
         public async Task<RealtimeAck> JoinZoneAsync(string zone) =>
             RealtimeAck.From(await _io.EmitWithAckAsync("zone:join", new { zone }).ConfigureAwait(false));
+
+        /// <summary>Walk into a home (the server checks the visit rules). Leave by joining a zone again.</summary>
+        public async Task<RealtimeAck> EnterHomeAsync(string ownerId) =>
+            RealtimeAck.From(await _io.EmitWithAckAsync("home:enter", new { ownerId }).ConfigureAwait(false));
 
         public async Task<RealtimeAck> LeaveZoneAsync() =>
             RealtimeAck.From(await _io.EmitWithAckAsync("zone:leave").ConfigureAwait(false));

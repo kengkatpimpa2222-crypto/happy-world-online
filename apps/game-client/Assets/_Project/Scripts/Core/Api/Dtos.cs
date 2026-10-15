@@ -809,4 +809,120 @@ namespace HappyWorld.Core.Api
         public Dictionary<string, int> materials;
         public Business business;
     }
+
+    // ---------- First home (Phase 10) ----------
+
+    public sealed class HomeOwner
+    {
+        public string userId;
+        public string displayName;
+        public int level;
+    }
+
+    public sealed class HomePlot
+    {
+        public int plotNumber;
+        public int street;
+        public int slot;
+        public float x;
+        public float y;
+        public ZonePoint door;
+        public string facing; // N | S
+    }
+
+    public sealed class HomeInterior
+    {
+        public float width;
+        public float height;
+        public ZonePoint spawn;
+    }
+
+    /// <summary>A piece standing in a home. footprint = [w, h] cells before rotation.</summary>
+    public sealed class HomePiece
+    {
+        public string id;
+        public string itemId;
+        public int x;
+        public int y;
+        public int rotation;
+        public int[] footprint = { 1, 1 };
+    }
+
+    /// <summary>GET /homes/me and GET /homes/{ownerId}</summary>
+    public sealed class HomeView
+    {
+        public string homeId;
+        public HomeOwner owner;
+        public bool isMine;
+        public bool isFriend;
+        public bool claimed;
+        public HomePlot plot;
+        /// <summary>PRIVATE | FRIENDS | PUBLIC; only sent to the owner.</summary>
+        public string visitPolicy;
+        public int gridWidth = 8;
+        public int gridHeight = 8;
+        public HomeInterior interior;
+        public int layoutVersion;
+        public List<HomePiece> furniture = new List<HomePiece>();
+    }
+
+    /// <summary>GET /homes/me/furniture row</summary>
+    public sealed class FurnitureBagItem
+    {
+        public string itemId;
+        public string nameKey;
+        public int[] footprint = { 1, 1 };
+        public int inBag;
+        public int placed;
+    }
+
+    public sealed class HomeGift
+    {
+        public string itemId;
+        public int quantity;
+    }
+
+    public sealed class ClaimHomeResult
+    {
+        public bool claimed;
+        public int plotNumber;
+        /// <summary>Welcome furniture added to the bag.</summary>
+        public List<HomeGift> gift = new List<HomeGift>();
+        public HomeView home;
+    }
+
+    public sealed class SaveLayoutResult
+    {
+        public bool replayed;
+        public int placed;
+        public int moved;
+        public int removed;
+        public int version;
+        public HomeView home;
+    }
+
+    public sealed class DistrictPlot
+    {
+        public int plotNumber;
+        public int slot;
+        public float x;
+        public float y;
+        public ZonePoint door;
+        public string facing;
+        public bool taken;
+        public HomeOwner owner;
+        public bool isMine;
+        public bool isFriend;
+        public string visitPolicy;
+        public bool canVisit;
+    }
+
+    /// <summary>GET /homes/district</summary>
+    public sealed class HomeDistrict
+    {
+        public int street;
+        public int streets;
+        public int? myPlot;
+        public List<DistrictPlot> plots = new List<DistrictPlot>();
+    }
 }

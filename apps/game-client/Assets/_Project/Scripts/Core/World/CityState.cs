@@ -63,7 +63,14 @@ namespace HappyWorld.Core.World
             rt.PlayerLeft += Remove;
             rt.PlayerMoved += ApplyMove;
             rt.MoveCorrected += c => Corrected?.Invoke(c.x, c.y);
+            rt.HomeState += ApplyHomeState;
         }
+
+        /// <summary>Phase 10: inside a home the "zone" is HOME and the room is that home; the same events move people.</summary>
+        public void ApplyHomeState(HomeState s) =>
+            ApplyZoneState(new ZoneState { zone = HomeZone, room = s.room, you = s.you, players = s.players });
+
+        public const string HomeZone = "HOME";
 
         public void ApplyZoneState(ZoneState s)
         {

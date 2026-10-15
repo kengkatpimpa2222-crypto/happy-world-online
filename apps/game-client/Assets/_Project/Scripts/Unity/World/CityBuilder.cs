@@ -113,6 +113,8 @@ namespace HappyWorld.Unity.World
                 // Market: stalls (x 7..38) and the y=20 walkway NPC customers use come from the server, so keep
                 // random houses/trees out of that area (on device a house stood in the walkway, Phase 5 QA).
                 if (zone.id == "MARKET" && pos.x > 6) continue;
+                // Homes (Phase 10): the street and its twelve plots are built by HomeDistrictView
+                if (zone.id == "HOMES" && pos.z > 9f && pos.z < 28.5f && pos.x < 35f) continue;
                 var roll = rnd.NextDouble();
                 if (roll < 0.45) Tree(root, pos, rnd);
                 else if (roll < 0.6) Bushes(root, pos, rnd);
