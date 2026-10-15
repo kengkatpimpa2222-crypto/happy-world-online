@@ -651,6 +651,9 @@ namespace HappyWorld.Unity
                 _cityCamOffset = follow.Offset;
                 follow.Target = _interior.transform;
                 follow.Offset = _interior.Center + new Vector3(0, 13f, -7.5f);
+                // look at the room, not at the interior's corner origin (the room sat off to the right and half under
+                // the decorate panel, Phase 10 QA); aim a little south so the room clears the panel at the bottom
+                follow.LookOffset = _interior.Center + new Vector3(0, 0, -2.5f);
             }
             _ui.ShowDecorate();
         }
@@ -672,6 +675,7 @@ namespace HappyWorld.Unity
             {
                 follow.Target = _local.transform;
                 follow.Offset = _cityCamOffset == Vector3.zero ? new Vector3(0, 11f, -9f) : _cityCamOffset;
+                follow.LookOffset = Vector3.up;
             }
             _ui.HideDecorate();
             if (refresh && CurrentHome != null) Run(() => LoadHomeLayoutAsync(CurrentHome.ownerId));
