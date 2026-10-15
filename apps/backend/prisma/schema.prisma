@@ -323,10 +323,28 @@ model PlayerHome {
   createdAt     DateTime @default(now()) @map("created_at")
   updatedAt     DateTime @updatedAt @map("updated_at")
 
+  // ---- Phase 10: the first home in the residential district ----
+  /// Plot in the district of this age band (street = plot / 12). Null until the player claims the home.
+  /// unique (plot_age_band, plot_number) WHERE plot_number IS NOT NULL lives in the migration SQL;
+  /// a CHECK keeps plot_age_band, plot_number and claimed_at all null or all set.
+  plotAgeBand   AgeBand?        @map("plot_age_band")
+  plotNumber    Int?            @map("plot_number")
+  claimedAt     DateTime?       @map("claimed_at")
+  visitPolicy   HomeVisitPolicy @default(FRIENDS) @map("visit_policy")
+  /// Idempotency-Key of the last saved layout: a retried save returns the saved layout instead of a conflict
+  layoutSaveKey String?         @map("layout_save_key") @db.VarChar(64)
+
   user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   furniture HomeFurniture[]
 
   @@map("player_homes")
+}
+
+/// Who may walk into a home (Phase 10). PUBLIC still means "same age band, not blocked".
+enum HomeVisitPolicy {
+  PRIVATE
+  FRIENDS
+  PUBLIC
 }
 
 model HomeFurniture {
@@ -750,6 +768,12 @@ enum InventoryTransactionType {
   EXPEDITION_LOOT
   CRAFT_CONSUME
   ADMIN_ADJUSTMENT
+  /// Phase 10: a piece of furniture left the bag to stand in the home (negative delta)
+  HOME_PLACE
+  /// Phase 10: a piece was taken out of the home back into the bag (positive delta)
+  HOME_REMOVE
+  /// Phase 10: furniture gifted once with the starter home
+  HOME_STARTER_GIFT
 }
 
 /// Append-only ledger of item quantity changes (a DB trigger forbids UPDATE/DELETE), the item twin of

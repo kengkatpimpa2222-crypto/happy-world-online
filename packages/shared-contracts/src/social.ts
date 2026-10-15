@@ -149,6 +149,8 @@ export const WsEvent = {
   CHAT_PRESET: 'chat:preset',
   FRIEND_INVITE: 'friend:invite',
   HEARTBEAT: 'heartbeat',
+  /** Phase 10: walk into a home ({ ownerId }); leave it with zone:join */
+  HOME_ENTER: 'home:enter',
   // server -> client
   READY: 'ready',
   ZONE_STATE: 'zone:state',
@@ -176,5 +178,12 @@ export const WsEvent = {
   // Phase 7: time dimension
   /** a city project was finished: every zone of that age band (clients add the building) */
   CITY_GROWTH: 'city:growth',
+  // Phase 10: homes
+  /** you are inside a home: owner, room size and who else is there */
+  HOME_STATE: 'home:state',
+  /** the owner saved a new layout: people inside re-fetch GET /homes/:ownerId */
+  HOME_LAYOUT_CHANGED: 'home:layout',
+  /** you may no longer be in this home (owner closed it, unfriended or blocked you): back to the district */
+  HOME_KICKED: 'home:kicked',
   ERROR: 'error:app',
 } as const;

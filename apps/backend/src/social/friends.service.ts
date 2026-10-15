@@ -166,6 +166,8 @@ export class FriendsService {
       const deleted = await this.deleteFriendship(tx, userId, friendId);
       if (deleted > 0) await this.audit.log({ actorUserId: userId, action: 'friends.removed', targetType: 'user', targetId: friendId }, tx);
     });
+    // Phase 10: a friends-only home is closed to an ex-friend straight away
+    await this.realtime.homeAccessChanged([userId, friendId]);
   }
 
   async deleteFriendship(tx: Tx, a: string, b: string): Promise<number> {

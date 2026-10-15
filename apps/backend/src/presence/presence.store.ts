@@ -13,6 +13,8 @@ export interface PresenceEntry {
   x: number;
   y: number;
   dir: number;
+  /** Phase 10: walkable size while inside a home (zone = HOME); city zones use their ZoneConfig */
+  bounds?: { width: number; height: number };
   lastMoveAt: number;
   lastSeen: number;
 }
