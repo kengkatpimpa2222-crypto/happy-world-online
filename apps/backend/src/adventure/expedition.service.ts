@@ -40,11 +40,12 @@ export class ExpeditionService {
   ) {}
 
   async overview(userId: string) {
-    const [skills, active, last, materials] = await Promise.all([
+    const [skills, active, last, materials, visited] = await Promise.all([
       this.skills.all(this.prisma, userId),
       this.prisma.expedition.findFirst({ where: { userId, claimedAt: null } }),
       this.prisma.expedition.findFirst({ where: { userId, claimedAt: { not: null } }, orderBy: { claimedAt: 'desc' } }),
       materialsOf(this.prisma, userId),
+      this.prisma.expedition.groupBy({ by: ['site'], where: { userId, claimedAt: { not: null } } }),
     ]);
     const explorer = skills.EXPLORER.level;
     return {
@@ -59,6 +60,9 @@ export class ExpeditionService {
           materials: MATERIAL_CODES.filter((c) => d.gather[c] || Object.values(d.events).some((e) => e.reward[c])),
           eventCount: d.eventCount,
           explorerXp: d.explorerXp,
+          /** no trip here has been claimed yet: the next one brings at least one set for `firstVisitRecipe` */
+          firstVisit: !visited.some((v) => v.site === site),
+          firstVisitRecipe: d.firstVisitRecipe,
         };
       }),
       plans: EXPEDITION_PLAN_CODES.map((plan) => ({ plan, ...EXPEDITION_PLANS[plan] })),
@@ -106,7 +110,9 @@ export class ExpeditionService {
       const secondsLeft = Math.ceil((exp.endsAt.getTime() - Date.now()) / 1000);
       if (secondsLeft > 0) throw AppException.conflict(ErrorCode.EXPEDITION_NOT_FINISHED, 'Still on the way', { secondsLeft });
 
-      const outcome = rollExpedition(exp.seed, exp.site as ExpeditionSite, exp.plan as ExpeditionPlan, exp.explorerLevel);
+      // first claimed trip to this site gets the safety net (one trip at a time, and this row is locked, so the count is stable)
+      const visits = await tx.expedition.count({ where: { userId, site: exp.site, claimedAt: { not: null } } });
+      const outcome = rollExpedition(exp.seed, exp.site as ExpeditionSite, exp.plan as ExpeditionPlan, exp.explorerLevel, { firstVisit: visits === 0 });
       for (const code of MATERIAL_CODES) {
         const n = outcome.loot[code] ?? 0;
         if (n <= 0) continue;

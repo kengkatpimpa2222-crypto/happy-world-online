@@ -27,6 +27,12 @@ namespace HappyWorld.Unity.UI
         private Text _cityText;
         private Image _festivalBg;
         private float _lastSaleToast = -999f;
+        // Phase 9.1: live trip countdown on the HUD button and the explore screen
+        private Text _exploreText, _tripStatus, _tripButtonText;
+        private Button _tripButton;
+        private Image _tripButtonBg;
+        private double _tripTickAt;
+        private string _exploreLabel;
 
         public VirtualJoystick Joystick { get; private set; }
         public bool ModalOpen => _modalLayer.childCount > 0;
@@ -45,6 +51,7 @@ namespace HappyWorld.Unity.UI
             _toastLayer = UiKit.Rect("Toasts", _root).Place(Vector2.zero, Vector2.one);
             BuildHud();
             _hud.gameObject.SetActive(false);
+            _s.Trips.Arrived += OnTripArrived;
         }
 
         // ---------- full screens ----------
@@ -238,8 +245,10 @@ namespace HappyWorld.Unity.UI
             for (int i = 0; i < buttons.Length; i++)
             {
                 var b = buttons[i];
-                UiKit.Button(_hud, Texts.T(b.key), UiKit.Primary, () => b.open(), 30).GetComponent<RectTransform>()
+                var hb = UiKit.Button(_hud, Texts.T(b.key), UiKit.Primary, () => b.open(), 30);
+                hb.GetComponent<RectTransform>()
                     .Place(new Vector2(1, 1), new Vector2(1, 1), new Vector2(-230, -104 - i * 96), new Vector2(-16, -16 - i * 96));
+                if (b.key == "ui.explore") _exploreText = hb.GetComponentInChildren<Text>();
             }
             UiKit.Button(_hud, Texts.T("ui.chat"), UiKit.Good, ShowChat, 36).GetComponent<RectTransform>()
                 .Place(new Vector2(1, 0), new Vector2(1, 0), new Vector2(-300, 40), new Vector2(-40, 170));
@@ -873,6 +882,7 @@ namespace HappyWorld.Unity.UI
 
         private void FillExplore(RectTransform list, ExpeditionOverview o)
         {
+            _tripStatus = null;
             o.skills.TryGetValue("EXPLORER", out var ex);
             o.skills.TryGetValue("CRAFTER", out var cr);
             UiKit.Row(list, SkillLine(ex) + "\n" + SkillLine(cr), 100);
@@ -881,19 +891,19 @@ namespace HappyWorld.Unity.UI
             if (o.active != null)
             {
                 var a = o.active;
-                var row = UiKit.Row(list, "<b>กำลังเดินทาง:</b> " + AdventurePresenter.SiteName(a.site) + " · " + AdventurePresenter.PlanName(a.plan) +
-                    "\n<size=24>" + (a.ready ? "กลับถึงบ้านแล้ว มาดูว่าได้อะไรมาบ้าง" : AdventurePresenter.TimeLeft(a.secondsLeft) + " · ปิดเกมไว้ได้ การเดินทางยังไปต่อ") + "</size>", 110);
-                var id = a.id;
-                if (a.ready)
-                    UiKit.RowButton(row, "ดูผล", UiKit.Good, () => _s.Run(async () =>
-                    {
-                        var t = await _s.Api.ClaimExpeditionAsync(id);
-                        if (t.result != null && t.result.playerLevel.HasValue) ApplyLevel(t.result.playerLevel);
-                        ShowExpeditionStory(t);
-                    }), 150);
-                else
-                    UiKit.RowButton(row, "รีเฟรช", UiKit.Muted, ShowExplore, 150);
+                // the line and the button follow the tracker every quarter second (TickTrip): no "รีเฟรช" needed
+                var row = UiKit.Row(list, "<b>กำลังเดินทาง:</b> " + AdventurePresenter.SiteName(a.site) + " · " + AdventurePresenter.PlanName(a.plan), 110);
+                var label = row.GetComponentInChildren<Text>(); // the row's own label (the button is added after)
+                _exploreLabel = label.text;
+                _tripStatus = label;
+                _tripButton = UiKit.RowButton(row, "ดูผล", UiKit.Good, OnTripButton, 170);
+                _tripButtonText = _tripButton.GetComponentInChildren<Text>();
+                _tripButtonBg = _tripButton.GetComponent<Image>();
             }
+            // the freshest server state there is (after the row exists, so an arrival shows here, not as a toast)
+            _s.Trips.Apply(o.active, GameSession.Clock);
+            _tripTickAt = 0;
+            TickTrip(GameSession.Clock);
 
             foreach (var site in o.sites)
             {
@@ -904,9 +914,10 @@ namespace HappyWorld.Unity.UI
                     continue;
                 }
                 var mins = site.seconds >= 60 ? (site.seconds / 60) + " นาที" : site.seconds + " วินาที";
-                var row = UiKit.Row(list, "<b>" + name + "</b>  <size=24>" + mins + " · เจอเหตุการณ์ " + site.eventCount + " อย่าง</size>\n<size=24>" + AdventurePresenter.SiteBlurb(site.site) + "</size>", 110);
-                var code = site.site;
-                var go = UiKit.RowButton(row, "ออกเดินทาง", UiKit.Primary, () => ShowPlanPicker(code), 190);
+                var row = UiKit.Row(list, "<b>" + name + "</b>  <size=24>" + mins + " · เจอเหตุการณ์ " + site.eventCount + " อย่าง</size>\n<size=24>" + AdventurePresenter.SiteBlurb(site.site) +
+                    (site.firstVisit ? "  <color=#B9770E>★ ไปครั้งแรกได้ของครบชุด</color>" : "") + "</size>", 110);
+                var info = site;
+                var go = UiKit.RowButton(row, "ออกเดินทาง", UiKit.Primary, () => ShowPlanPicker(info), 190);
                 go.interactable = o.active == null;
             }
             if (o.lastClaimed != null)
@@ -916,6 +927,74 @@ namespace HappyWorld.Unity.UI
             }
         }
 
+        /// <summary>
+        /// Phase 9.1: called every frame by GameSession; four times a second it redraws the trip countdown on
+        /// the HUD button and, when the explore screen is open, its status line and button.
+        /// </summary>
+        public void TickTrip(double now)
+        {
+            if (now < _tripTickAt) return;
+            _tripTickAt = now + 0.25;
+            var t = _s.Trips;
+            if (_exploreText != null)
+            {
+                var badge = AdventurePresenter.HudBadge(t, now);
+                _exploreText.text = Texts.T("ui.explore") + (badge.Length > 0 ? " <size=22>" + badge + "</size>" : "");
+            }
+            if (_tripStatus == null) return; // the explore screen is closed (destroyed Unity objects compare equal to null)
+            _tripStatus.text = _exploreLabel + "\n<size=24>" + AdventurePresenter.TripStatus(t, now) + "</size>";
+            string text;
+            Color color;
+            bool on;
+            if (t.Claiming) { text = "กำลังเปิด..."; color = UiKit.Muted; on = false; }
+            else if (t.Phase == TripPhase.Ready) { text = "ดูผล"; color = UiKit.Good; on = true; }
+            else if (t.Offline && t.SecondsLeft(now) == 0) { text = "ลองใหม่"; color = UiKit.Accent; on = true; }
+            else { text = "เดินทางอยู่"; color = UiKit.Muted; on = false; }
+            _tripButtonText.text = text;
+            _tripButtonBg.color = color;
+            _tripButton.interactable = on;
+        }
+
+        private void OnTripButton()
+        {
+            var t = _s.Trips;
+            if (t.Phase != TripPhase.Ready)
+            {
+                t.Resync(GameSession.Clock); // "ลองใหม่"
+                _tripTickAt = 0;
+                return;
+            }
+            if (!t.TryBeginClaim()) return; // already claiming: a second tap does nothing
+            var id = t.Trip.id;
+            _tripTickAt = 0;
+            _s.Run(async () =>
+            {
+                ExpeditionTrip trip;
+                try
+                {
+                    trip = await _s.Api.ClaimExpeditionAsync(id);
+                }
+                catch (ApiException e)
+                {
+                    t.ClaimFailed(e.Code, e.Status, GameSession.Clock); // network: still "ดูผล", retrying is safe
+                    _tripTickAt = 0;
+                    throw; // GameSession.Run shows it as a Thai toast
+                }
+                t.ClaimSucceeded();
+                if (trip.result != null && trip.result.playerLevel.HasValue) ApplyLevel(trip.result.playerLevel);
+                ShowExpeditionStory(trip);
+            });
+        }
+
+        /// <summary>The server confirmed the trip is back (also right after opening the app when it came back while closed).</summary>
+        private void OnTripArrived(ExpeditionTrip t)
+        {
+            _tripTickAt = 0;
+            if (_tripStatus != null || !_hud.gameObject.activeSelf) return; // the explore screen already shows "ดูผล"
+            Audio.GameAudio.Sfx("sfx_coin", 0.6f);
+            Toast("กลับจาก" + AdventurePresenter.SiteName(t.site) + "แล้ว มาดูว่าได้อะไรมาบ้าง", "ดูผล", ShowExplore);
+        }
+
         private static string SkillLine(SkillView v)
         {
             if (v == null) return "";
@@ -923,20 +1002,36 @@ namespace HappyWorld.Unity.UI
             return AdventurePresenter.SkillName(v.skill) + " เลเวล " + v.level + "<size=24>" + next + "</size>";
         }
 
-        private void ShowPlanPicker(string site)
+        private void ShowPlanPicker(ExpeditionSiteInfo info)
         {
+            var site = info.site;
             var list = OpenModal(AdventurePresenter.SiteName(site));
             UiKit.Row(list, "<size=26>เลือกวิธีเดินทาง ระหว่างทางจะเจอเหตุการณ์ที่ผ่านได้หรือพลาดได้ นักสำรวจเก่งขึ้นก็ผ่านง่ายขึ้น</size>", 90);
+            var hint = AdventurePresenter.FirstVisitHint(info);
+            if (hint != null) UiKit.Row(list, "<size=24>★ " + hint + "</size>", 70);
+            var go = new List<Button>();
             foreach (var plan in new[] { "CAREFUL", "STEADY", "BOLD" })
             {
                 var p = plan;
                 var row = UiKit.Row(list, "<b>" + AdventurePresenter.PlanName(p) + "</b>\n<size=24>" + AdventurePresenter.PlanBlurb(p) + "</size>", 110);
-                UiKit.RowButton(row, "ไปเลย", p == "BOLD" ? UiKit.Accent : UiKit.Good, () => _s.Run(async () =>
+                go.Add(UiKit.RowButton(row, "ไปเลย", p == "BOLD" ? UiKit.Accent : UiKit.Good, () =>
                 {
-                    var t = await _s.Api.StartExpeditionAsync(site, p);
-                    Toast("ออกเดินทางไป" + AdventurePresenter.SiteName(t.site) + "แล้ว " + AdventurePresenter.TimeLeft(t.secondsLeft));
-                    ShowExplore();
-                }), 150);
+                    foreach (var b in go) b.interactable = false; // one trip at a time: a double tap must not send two starts
+                    _s.Run(async () =>
+                    {
+                        try
+                        {
+                            var t = await _s.Api.StartExpeditionAsync(site, p);
+                            _s.Trips.Apply(t, GameSession.Clock);
+                            Toast("ออกเดินทางไป" + AdventurePresenter.SiteName(t.site) + "แล้ว " + AdventurePresenter.TimeLeft(t.secondsLeft));
+                            ShowExplore();
+                        }
+                        finally
+                        {
+                            foreach (var b in go) if (b != null) b.interactable = true;
+                        }
+                    });
+                }, 150));
             }
             UiKit.RowButton(UiKit.Row(list, ""), "ย้อนกลับ", UiKit.Muted, ShowExplore, 160);
         }
@@ -982,20 +1077,41 @@ namespace HappyWorld.Unity.UI
                     var one = IdempotencyKeys.New();
                     var all = IdempotencyKeys.New();
                     var times = Math.Min(10, r.canMake);
-                    var b1 = UiKit.RowButton(row, "ทำ 1", UiKit.Good, () => Craft(id, recipe, 1, one), 120);
+                    Button b1 = null, bAll = null;
+                    b1 = UiKit.RowButton(row, "ทำ 1", UiKit.Good, () => Craft(id, recipe, 1, one, b1, bAll), 120);
                     b1.interactable = r.canMake > 0;
-                    var bAll = UiKit.RowButton(row, "ทำ " + Math.Max(1, times), UiKit.Accent, () => Craft(id, recipe, Math.Max(1, times), all), 120);
+                    bAll = UiKit.RowButton(row, "ทำ " + Math.Max(1, times), UiKit.Accent, () => Craft(id, recipe, Math.Max(1, times), all, b1, bAll), 120);
                     bAll.interactable = times > 1;
                 }
                 UiKit.RowButton(UiKit.Row(list, "<size=24>วัตถุดิบหามาจากการออกสำรวจ</size>", 70), Texts.T("ui.explore"), UiKit.Primary, ShowExplore, 190);
             });
         }
 
-        private void Craft(string businessId, string recipe, int times, string key)
+        /// <summary>
+        /// The key is fixed per button until the screen is redrawn, so a retry after a timeout is the same craft
+        /// (the server does it once). Both buttons are disabled while it is on its way (Phase 9.1).
+        /// </summary>
+        private void Craft(string businessId, string recipe, int times, string key, params Button[] row)
         {
+            foreach (var b in row) if (b != null) b.interactable = false;
             _s.Run(async () =>
             {
-                var r = await _s.Api.CraftAsync(businessId, recipe, times, key);
+                CraftResult r;
+                try
+                {
+                    r = await _s.Api.CraftAsync(businessId, recipe, times, key);
+                }
+                catch (Exception)
+                {
+                    foreach (var b in row) if (b != null) b.interactable = true; // same key: pressing again is safe
+                    throw;
+                }
+                if (r.replayed)
+                {
+                    Toast("ทำ" + AdventurePresenter.RecipeName(recipe) + "รอบนี้เสร็จไปแล้ว ไม่ได้หักวัตถุดิบหรือค่าแรงซ้ำ");
+                    ShowCrafting(businessId);
+                    return;
+                }
                 ApplyLevel(r.level);
                 Toast("ทำ" + AdventurePresenter.RecipeName(recipe) + "ได้ " + r.unitsMade + " " + MarketNpcPlanner.ProductUnit(r.productCode) + " เข้าคลังร้านแล้ว" +
                     (r.crafterLeveledUp ? "  ช่างฝีมือเลเวล " + r.crafter.level + "!" : ""), "ดูร้าน", ShowShop);

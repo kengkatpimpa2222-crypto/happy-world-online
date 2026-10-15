@@ -180,9 +180,9 @@ curl -s $API/city/growth -H "authorization: Bearer $TOKEN"
 
 | Method | Path | หมายเหตุ |
 |---|---|---|
-| GET | `/expeditions` | สถานที่ (`unlocked`, `seconds`), แผน, ทริปที่กำลังไป (`active`), ทริปล่าสุด, ทักษะ `EXPLORER`/`CRAFTER` และวัตถุดิบของฉัน |
+| GET | `/expeditions` | สถานที่ (`unlocked`, `seconds`, `firstVisit`, `firstVisitRecipe`), แผน, ทริปที่กำลังไป (`active`), ทริปล่าสุด, ทักษะ `EXPLORER`/`CRAFTER` และวัตถุดิบของฉัน |
 | POST | `/expeditions/start` | `{site, plan}` ไปได้ทีละทริป (`EXPEDITION_IN_PROGRESS`), สถานที่ยังล็อก = `EXPEDITION_LOCKED` server สุ่ม seed เก็บไว้ ไม่ส่งให้เครื่อง |
-| POST | `/expeditions/:id/claim` | ยังไม่ถึงเวลา = `EXPEDITION_NOT_FINISHED` (`secondsLeft`) ถึงแล้ว server คำนวณเรื่องราวและของที่ได้ คืน `{result: {gathered, events[], loot, explorerXp, playerXp, ...}, skills, materials}` เรียกซ้ำได้ผลเดิม (`replayed: true`) |
+| POST | `/expeditions/:id/claim` | ยังไม่ถึงเวลา = `EXPEDITION_NOT_FINISHED` (`secondsLeft`) ถึงแล้ว server คำนวณเรื่องราวและของที่ได้ คืน `{result: {gathered, events[], loot, firstVisitBonus, explorerXp, playerXp, ...}, skills, materials}` (`firstVisitBonus` = ของที่เติมให้ในทริปแรกของสถานที่นั้น นับรวมใน `loot` แล้ว) เรียกซ้ำได้ผลเดิม (`replayed: true`) |
 | GET | `/crafting` | สูตร (วัตถุดิบที่ใช้, ได้กี่ชิ้น, ค่าแรง, ทำได้กี่ครั้ง `canMake`), วัตถุดิบของฉัน, ทักษะช่าง |
 | POST | `/crafting/craft` | ต้องมี `Idempotency-Key` `{recipe, businessId, times 1-10}` จ่ายค่าแรง Gold ใช้วัตถุดิบ ใส่สินค้าเข้าคลังร้าน วัตถุดิบไม่พอ = `NOT_ENOUGH_MATERIALS`, สูตรล็อก = `RECIPE_LOCKED`, คลังเต็ม = `BUSINESS_STOCK_FULL` |
 

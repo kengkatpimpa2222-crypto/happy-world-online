@@ -8,6 +8,7 @@ import {
   MATERIAL_CODES,
   MaterialBag,
   MaterialCode,
+  RECIPES,
 } from '@hwo/shared-contracts';
 import { pickWeighted, seededRandom } from '../business/living-shop-sim';
 
@@ -25,8 +26,10 @@ export interface ExpeditionOutcome {
   /** what was gathered along the way, before events */
   gathered: MaterialBag;
   events: ExpeditionEventOutcome[];
-  /** final haul: gathered + gained - lost (never below zero, never empty) */
+  /** final haul: gathered + gained - lost + firstVisitBonus (never below zero, never empty) */
   loot: MaterialBag;
+  /** what the first-visit safety net topped up so the site's first recipe can be made once (empty otherwise) */
+  firstVisitBonus: MaterialBag;
   explorerXp: number;
   playerXp: number;
 }
@@ -41,7 +44,13 @@ const entries = (bag: MaterialBag) => MATERIAL_CODES.filter((c) => (bag[c] ?? 0)
  * same story, so the server can roll it at claim time and a repeated claim tells the same story.
  * A fixed number of random values is drawn per step so one roll never shifts the next one.
  */
-export function rollExpedition(seed: number, site: ExpeditionSite, plan: ExpeditionPlan, explorerLevel: number): ExpeditionOutcome {
+export function rollExpedition(
+  seed: number,
+  site: ExpeditionSite,
+  plan: ExpeditionPlan,
+  explorerLevel: number,
+  opts: { firstVisit?: boolean } = {},
+): ExpeditionOutcome {
   const def = EXPEDITION_SITES[site];
   const planDef = EXPEDITION_PLANS[plan];
   const rng = seededRandom(`expedition:${seed}:${site}`);
@@ -89,7 +98,20 @@ export function rollExpedition(seed: number, site: ExpeditionSite, plan: Expedit
   const final: MaterialBag = {};
   for (const [c, n] of entries(loot)) final[c] = n;
   if (entries(final).length === 0) final[pool[0]!] = 1;
-  return { gathered, events, loot: final, explorerXp, playerXp: def.playerXp };
+
+  // first trip to this site: top up only what is missing for one craft of its recipe (no rng drawn, so the
+  // rest of the story is the same roll it would have been)
+  const firstVisitBonus: MaterialBag = {};
+  if (opts.firstVisit) {
+    for (const [c, need] of entries(RECIPES[def.firstVisitRecipe].inputs)) {
+      const short = need - (final[c] ?? 0);
+      if (short > 0) {
+        firstVisitBonus[c] = short;
+        final[c] = need;
+      }
+    }
+  }
+  return { gathered, events, loot: final, firstVisitBonus, explorerXp, playerXp: def.playerXp };
 }
 
 export function bagTotal(bag: MaterialBag): number {

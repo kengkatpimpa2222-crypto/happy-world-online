@@ -130,6 +130,8 @@ namespace HappyWorld.Core.World
             if (r == null) return lines;
             lines.Add("ระหว่างทางเก็บได้ " + Bag(r.gathered));
             foreach (var e in r.events) lines.Add(EventLine(e));
+            if (r.firstVisitBonus != null && r.firstVisitBonus.Values.Any(n => n > 0))
+                lines.Add("★ " + FirstVisitHost(trip.site) + "ฝากของต้อนรับมาให้ (+" + Bag(r.firstVisitBonus) + ") พอทำ" + RecipeName(FirstVisitRecipe(trip.site)) + "ได้แล้ว");
             lines.Add("<b>ได้กลับบ้าน: " + Bag(r.loot) + "</b>");
             var xp = "XP นักสำรวจ +" + r.explorerXp + " · XP ตัวละคร +" + r.playerXp;
             if (r.explorerLeveledUp) xp += " · <b>นักสำรวจเลเวล " + r.explorerLevelAfter + "!</b>";
@@ -138,12 +140,77 @@ namespace HappyWorld.Core.World
             return lines;
         }
 
+        /// <summary>Who hands over the first-visit welcome gift (Phase 9.1), so it reads as part of the story.</summary>
+        public static string FirstVisitHost(string site)
+        {
+            switch (site)
+            {
+                case "ORCHARD": return "ป้าเจ้าของสวน";
+                case "FLOWER_FOREST": return "ยายเก็บดอกไม้";
+                case "HERB_VALLEY": return "คุณตาหมอยา";
+                default: return "ชาวบ้าน";
+            }
+        }
+
+        /// <summary>The recipe a first trip to the site guarantees one set for (mirrors firstVisitRecipe in shared-contracts).</summary>
+        public static string FirstVisitRecipe(string site)
+        {
+            switch (site)
+            {
+                case "ORCHARD": return "MANGO_STICKY_RICE";
+                case "FLOWER_FOREST": return "JASMINE_GARLAND";
+                case "HERB_VALLEY": return "HERBAL_BALM";
+                default: return null;
+            }
+        }
+
+        /// <summary>Plan picker hint for a site never visited: the first trip always brings one set for its recipe.</summary>
+        public static string FirstVisitHint(ExpeditionSiteInfo site)
+        {
+            if (site == null || !site.firstVisit) return null;
+            var recipe = site.firstVisitRecipe ?? FirstVisitRecipe(site.site);
+            return "ไปครั้งแรก: กลับมาพร้อมวัตถุดิบครบสำหรับทำ" + RecipeName(recipe) + "อย่างน้อย 1 ชุดแน่นอน";
+        }
+
+        /// <summary>The live line under "กำลังเดินทาง" (Phase 9.1): countdown, checking, back, or why we can't tell.</summary>
+        public static string TripStatus(ExpeditionTracker t, double now)
+        {
+            if (t.Trip == null) return "";
+            if (t.Claiming) return "กำลังเปิดดูผล...";
+            if (t.Phase == TripPhase.Ready) return "กลับถึงบ้านแล้ว มาดูว่าได้อะไรมาบ้าง";
+            var left = t.SecondsLeft(now);
+            if (t.Offline)
+            {
+                var why = t.LastFailureWasNetwork ? "เชื่อมต่อเซิร์ฟเวอร์ไม่ได้" : "เซิร์ฟเวอร์ยังไม่ตอบ";
+                var retry = t.RetryIn(now);
+                var tail = retry > 0 ? " จะลองใหม่ใน " + retry + " วินาที" : " กำลังลองใหม่...";
+                return left > 0 ? TimeLeft(left) + " · " + why : why + tail;
+            }
+            if (left > 0) return TimeLeft(left) + " · ปิดเกมไว้ได้ การเดินทางยังไปต่อ";
+            return "ใกล้ถึงแล้ว กำลังเช็กกับเซิร์ฟเวอร์...";
+        }
+
+        /// <summary>Small text after "ออกสำรวจ" on the HUD button: the countdown, or that the trip is back.</summary>
+        public static string HudBadge(ExpeditionTracker t, double now)
+        {
+            if (t.Trip == null) return "";
+            if (t.Phase == TripPhase.Ready) return "ถึงแล้ว!";
+            var left = t.SecondsLeft(now);
+            return left > 0 ? Clock(left) : "...";
+        }
+
+        /// <summary>"2:05", or "1:02:05" for trips over an hour.</summary>
+        public static string Clock(int seconds)
+        {
+            var t = TimeSpan.FromSeconds(Math.Max(0, seconds));
+            return t.TotalHours >= 1 ? (int)t.TotalHours + ":" + t.Minutes.ToString("00") + ":" + t.Seconds.ToString("00") : (int)t.TotalMinutes + ":" + t.Seconds.ToString("00");
+        }
+
         /// <summary>"เหลือ 2:05" style countdown.</summary>
         public static string TimeLeft(int seconds)
         {
             if (seconds <= 0) return "ถึงแล้ว";
-            var t = TimeSpan.FromSeconds(seconds);
-            return "เหลือ " + (int)t.TotalMinutes + ":" + t.Seconds.ToString("00");
+            return "เหลือ " + Clock(seconds);
         }
 
         /// <summary>Recipe inputs vs what I have: "มะม่วง 1/3 · ...".</summary>

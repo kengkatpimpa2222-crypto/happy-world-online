@@ -74,4 +74,76 @@ describe('expedition rolls', () => {
   it('every material found on a trip is used by some recipe', () => {
     for (const m of MATERIAL_CODES) expect(Object.values(RECIPES).some((r) => (r.inputs[m] ?? 0) > 0)).toBe(true);
   });
+
+  describe('first visit to a site (Phase 9.1 new-player safety net)', () => {
+    const sets = (bag: Partial<Record<string, number>>, recipe: keyof typeof RECIPES) =>
+      Math.min(...Object.entries(RECIPES[recipe].inputs).map(([c, n]) => Math.floor((bag[c] ?? 0) / n!)));
+
+    it('always brings home at least one set of the site recipe, whatever the seed, plan or level', () => {
+      for (const site of EXPEDITION_SITE_CODES) {
+        for (const plan of EXPEDITION_PLAN_CODES) {
+          for (const level of [1, 4, 10]) {
+            for (const seed of SEEDS.slice(0, 500)) {
+              const o = rollExpedition(seed, site, plan, level, { firstVisit: true });
+              expect(sets(o.loot, EXPEDITION_SITES[site].firstVisitRecipe)).toBeGreaterThanOrEqual(1);
+            }
+          }
+        }
+      }
+    });
+
+    it('only tops up what is missing: same story, same loot plus the bonus, bonus limited to the recipe inputs', () => {
+      for (const site of EXPEDITION_SITE_CODES) {
+        const inputs = RECIPES[EXPEDITION_SITES[site].firstVisitRecipe].inputs as Record<string, number>;
+        for (const plan of EXPEDITION_PLAN_CODES) {
+          for (const seed of SEEDS.slice(0, 500)) {
+            const normal = rollExpedition(seed, site, plan, 1);
+            const first = rollExpedition(seed, site, plan, 1, { firstVisit: true });
+            expect(first.gathered).toEqual(normal.gathered);
+            expect(first.events).toEqual(normal.events);
+            expect(first.explorerXp).toBe(normal.explorerXp);
+            for (const m of MATERIAL_CODES) {
+              const bonus = first.firstVisitBonus[m] ?? 0;
+              expect((first.loot[m] ?? 0) - (normal.loot[m] ?? 0)).toBe(bonus);
+              if (bonus > 0) {
+                expect(inputs[m]).toBeDefined();
+                expect(first.loot[m]).toBe(inputs[m]); // raised exactly to one set, never past it
+              }
+            }
+          }
+        }
+      }
+    });
+
+    it('a short first orchard trip is topped up to exactly one set (a known seed)', () => {
+      const seed = SEEDS.find((s) => sets(rollExpedition(s, 'ORCHARD', 'STEADY', 1).loot, 'MANGO_STICKY_RICE') === 0)!;
+      expect(seed).toBeDefined();
+      const normal = rollExpedition(seed, 'ORCHARD', 'STEADY', 1);
+      const first = rollExpedition(seed, 'ORCHARD', 'STEADY', 1, { firstVisit: true });
+      expect(bagTotal(first.firstVisitBonus)).toBeGreaterThan(0);
+      expect(sets(first.loot, 'MANGO_STICKY_RICE')).toBe(1);
+      expect(bagTotal(first.loot)).toBe(bagTotal(normal.loot) + bagTotal(first.firstVisitBonus));
+    });
+
+    it('later trips never get a bonus', () => {
+      for (const seed of SEEDS.slice(0, 300)) expect(rollExpedition(seed, 'ORCHARD', 'BOLD', 1).firstVisitBonus).toEqual({});
+    });
+
+    it('is a small one-time gift: on average well under one material per site', () => {
+      for (const site of EXPEDITION_SITE_CODES) {
+        const level = EXPEDITION_SITES[site].explorerLevel;
+        const extra = SEEDS.reduce((a, s) => a + bagTotal(rollExpedition(s, site, 'STEADY', level, { firstVisit: true }).firstVisitBonus), 0) / SEEDS.length;
+        expect(extra).toBeLessThan(0.5);
+      }
+    });
+
+    it('every site names a recipe made from what that site gives', () => {
+      for (const site of EXPEDITION_SITE_CODES) {
+        const def = EXPEDITION_SITES[site];
+        const found = new Set([...Object.keys(def.gather), ...Object.values(def.events).flatMap((e) => Object.keys(e.reward))]);
+        for (const m of Object.keys(RECIPES[def.firstVisitRecipe].inputs)) expect(found.has(m)).toBe(true);
+        expect(RECIPES[def.firstVisitRecipe].crafterLevel).toBeLessThanOrEqual(2);
+      }
+    });
+  });
 });

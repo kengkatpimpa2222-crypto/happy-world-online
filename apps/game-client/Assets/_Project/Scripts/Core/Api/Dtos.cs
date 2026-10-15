@@ -721,6 +721,9 @@ namespace HappyWorld.Core.Api
         public List<string> materials = new List<string>();
         public int eventCount;
         public int explorerXp;
+        /// <summary>No trip here claimed yet: the next one brings at least one set for firstVisitRecipe (Phase 9.1).</summary>
+        public bool firstVisit;
+        public string firstVisitRecipe;
     }
 
     public sealed class ExpeditionEventOutcome
@@ -736,6 +739,8 @@ namespace HappyWorld.Core.Api
         public Dictionary<string, int> gathered = new Dictionary<string, int>();
         public List<ExpeditionEventOutcome> events = new List<ExpeditionEventOutcome>();
         public Dictionary<string, int> loot = new Dictionary<string, int>();
+        /// <summary>Topped up on a first visit so the site's recipe can be made once (already counted in loot).</summary>
+        public Dictionary<string, int> firstVisitBonus = new Dictionary<string, int>();
         public int explorerXp;
         public int playerXp;
         public int? playerLevel;
