@@ -262,6 +262,20 @@
                   "avatar": {
                     "type": "object",
                     "properties": {
+                      "bodyType": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "enum": [
+                              "female",
+                              "male"
+                            ]
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
                       "bodyColor": {
                         "type": "string",
                         "pattern": "^#[0-9A-Fa-f]{6}$"

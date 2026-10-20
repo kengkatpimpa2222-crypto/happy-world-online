@@ -12,7 +12,7 @@ namespace HappyWorld.EditorTools
     public sealed class ArtImportSettings : AssetPostprocessor
     {
         // bump to make Unity re-run these rules on already imported art
-        public override uint GetVersion() => 2;
+        public override uint GetVersion() => 3;
 
         private const string ArtRoot = "/Resources/Art/";
 
@@ -31,6 +31,17 @@ namespace HappyWorld.EditorTools
             t.npotScale = TextureImporterNPOTScale.None;
             t.textureCompression = TextureImporterCompression.Uncompressed; // 512x512 palette: compression smears the colour cells
             t.isReadable = false;
+            if (assetPath.Contains("/Art/Models/avatar/"))
+            {
+                // anime avatar atlases are painted art seen at many distances: smooth, mipmapped, compressed
+                // (ASTC on Android), alpha kept for eyelashes and hair tips. Hair UVs tile, atlases don't.
+                t.mipmapEnabled = true;
+                t.filterMode = FilterMode.Bilinear;
+                t.wrapMode = assetPath.Contains("_hair_") ? TextureWrapMode.Repeat : TextureWrapMode.Clamp;
+                t.textureCompression = TextureImporterCompression.Compressed;
+                t.alphaIsTransparency = true;
+                t.maxTextureSize = 1024;
+            }
         }
 
         private void OnPreprocessAudio()

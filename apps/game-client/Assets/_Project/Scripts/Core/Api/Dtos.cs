@@ -26,6 +26,8 @@ namespace HappyWorld.Core.Api
 
     public sealed class Avatar
     {
+        /// <summary>"female" or "male" (anime avatar body); null on avatars saved before it existed.</summary>
+        public string bodyType;
         public string bodyColor;
         public string outfitItemId;
         public string hairItemId;

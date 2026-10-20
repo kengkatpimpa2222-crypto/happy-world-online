@@ -21,6 +21,35 @@ Crediting Kenney is not required but we do it gladly.
 
 The Godot/Kenney logo tiles in those kits are **not** used.
 
+## VRoid Studio sample models (pixiv Inc.), CC0 1.0 public domain
+
+The anime player avatars in `Resources/Art/Models/avatar/` are made from the VRoid Studio beta sample models,
+which pixiv released under CC0 (https://vroid.pixiv.help/hc/en-us/articles/4402614652569). Every source file
+also says so in its own VRM meta (`licenseName: CC0`, `commercialUssageName: Allow`); `Tools/art/build_avatars.py`
+refuses any file that doesn't. Files were taken from https://github.com/madjin/vrm-samples (`vroid/beta`).
+
+| Avatar part | Sample model |
+|---|---|
+| female skeleton + face, `school_uniform` outfit, `long_black` hair | Sendagaya Shino |
+| female `casual` outfit, `short_brown` hair | Vivi |
+| female `basic_tee` outfit | HairSample_Female |
+| female `thai_silk` outfit | Darkness Shibu |
+| female `star_idol` outfit | Victoria Rubin |
+| female `bob_black` hair | Sendagaya Shibu |
+| male skeleton + face, `school_uniform` outfit, `short_brown` hair; `thai_silk` = the uniform recoloured | Sakurada Fumiriya |
+| male `casual` outfit, `messy_black` hair; `star_idol` = the hoodie recoloured | HairSample_Male |
+
+What the script changed: parts refitted onto one skeleton per body type, skin hidden under clothes removed,
+triangles reduced (about 14-16k per character), textures shrunk into atlases, recolours as noted. The straw hat
+(`*_hat_straw`, `hat_straw.png`) is made by the script. Rebuild with:
+
+```bash
+pip install numpy pillow meshoptimizer
+git clone --depth 1 --filter=blob:none --sparse https://github.com/madjin/vrm-samples /tmp/vrm-samples
+git -C /tmp/vrm-samples sparse-checkout set --no-cone 'vroid/beta/*.vrm'
+python3 apps/game-client/Tools/art/build_avatars.py /tmp/vrm-samples/vroid/beta
+```
+
 ## Made for this project (same licence as the game)
 
 - Music and generated sounds: music_town_day, music_town_night, music_minigame, amb_rain, sfx_fanfare, sfx_star,

@@ -1,0 +1,28 @@
+{
+  "female": {
+    "outfits": {
+      "casual": "Vivi",
+      "basic_tee": "HairSample_Female",
+      "school_uniform": "Sendagaya_Shino",
+      "thai_silk": "Darkness_Shibu",
+      "star_idol": "Victoria_Rubin"
+    },
+    "hairs": {
+      "bob_black": "Sendagaya_Shibu",
+      "long_black": "Sendagaya_Shino",
+      "short_brown": "Vivi"
+    }
+  },
+  "male": {
+    "outfits": {
+      "casual": "HairSample_Male",
+      "school_uniform": "Sakurada_Fumiriya",
+      "thai_silk": "Sakurada_Fumiriya (recoloured)",
+      "star_idol": "HairSample_Male (recoloured)"
+    },
+    "hairs": {
+      "short_brown": "Sakurada_Fumiriya",
+      "messy_black": "HairSample_Male"
+    }
+  }
+}
