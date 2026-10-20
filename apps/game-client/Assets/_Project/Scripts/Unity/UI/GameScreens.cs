@@ -626,6 +626,7 @@ namespace HappyWorld.Unity.UI
             {
                 var st = await _s.Api.GetDailyAsync();
                 _s.OnDaily(st);
+                if (list == null) return; // a newer ShowDaily replaced this modal meanwhile
                 UiKit.Clear(list);
                 FillDaily(list, st);
             });
