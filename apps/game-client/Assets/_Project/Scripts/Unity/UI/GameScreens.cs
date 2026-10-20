@@ -491,6 +491,7 @@ namespace HappyWorld.Unity.UI
         {
             var p = _s.Profile;
             if (p != null) _nameText.text = p.displayName + "  Lv." + p.level;
+            _s.RefreshLocalName();
             _s.RefreshDaily(); // most actions that move a mission end here (sell, collect, craft, claim)
             _s.Run(async () =>
             {

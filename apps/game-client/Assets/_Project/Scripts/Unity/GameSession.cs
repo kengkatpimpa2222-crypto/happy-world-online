@@ -999,6 +999,13 @@ namespace HappyWorld.Unity
         /// <summary>The server's clock (UTC) as of the last GET /daily.</summary>
         public DateTime DailyNow => Daily.ServerNow(Clock);
 
+        /// <summary>The name tag above your own character was built once at spawn, so it kept the old level
+        /// after a reward levelled you up while the HUD showed the new one (Phase 11 QA).</summary>
+        public void RefreshLocalName()
+        {
+            if (_localView != null && Profile != null) _localView.SetName(Profile.displayName, Profile.level, false);
+        }
+
         /// <summary>
         /// Re-reads GET /daily in the background (HUD badge). Quiet on failure: the badge is a nicety, so a lost
         /// read just tries again shortly instead of toasting an error over the game.
