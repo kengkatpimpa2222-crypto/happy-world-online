@@ -13,6 +13,8 @@ namespace HappyWorld.Core.Art
     ///
     /// Everything is converted to Unity's left-handed space on read: X is mirrored, rotations become
     /// (x, -y, -z, w) and triangle winding is flipped, and texture V is flipped (glTF's origin is top-left).
+    /// Skinned models (the anime avatars) also bring their skins, per-vertex joints/weights, morph targets
+    /// and the file's "extras" (humanoid bone map, spring bones), see <see cref="GlbSkin"/>.
     /// </summary>
     public sealed class GlbModel
     {
@@ -20,6 +22,9 @@ namespace HappyWorld.Core.Art
         public readonly List<int> Roots = new List<int>();
         public readonly List<GlbMesh> Meshes = new List<GlbMesh>();
         public readonly List<GlbClip> Clips = new List<GlbClip>();
+        public readonly List<GlbSkin> Skins = new List<GlbSkin>();
+        /// <summary>The file's top-level "extras" object (empty when it has none).</summary>
+        public JObject Extras = new JObject();
         /// <summary>File name of the first image (e.g. "colormap.png"); null when the model is untextured.</summary>
         public string ImageName;
 
@@ -110,6 +115,7 @@ namespace HappyWorld.Core.Art
                 foreach (JObject mj in meshes)
                 {
                     var mesh = new GlbMesh { Name = (string)mj["name"] };
+                    if (mj["extras"]?["targetNames"] is JArray names) foreach (var t in names) mesh.TargetNames.Add((string)t);
                     foreach (JObject pj in (JArray)mj["primitives"]) mesh.Primitives.Add(ReadPrimitive(pj));
                     m.Meshes.Add(mesh);
                 }
@@ -127,6 +133,18 @@ namespace HappyWorld.Core.Art
                     foreach (var n in m.Nodes) foreach (var c in n.Children) isChild[c] = true;
                     for (int i = 0; i < isChild.Length; i++) if (!isChild[i]) m.Roots.Add(i);
                 }
+                var skins = _j["skins"] as JArray;
+                if (skins != null)
+                    foreach (JObject sj in skins)
+                    {
+                        var joints = ((JArray)sj["joints"]).ToInts();
+                        foreach (var ji in joints)
+                            if (ji < 0 || ji >= m.Nodes.Count) throw new InvalidDataException("skin joint out of range");
+                        m.Skins.Add(new GlbSkin { Joints = joints });
+                    }
+                foreach (var n in m.Nodes)
+                    if (n.Skin >= m.Skins.Count) throw new InvalidDataException("node skin out of range");
+                if (_j["extras"] is JObject extras) m.Extras = extras;
                 var anims = _j["animations"] as JArray;
                 if (anims != null) foreach (JObject aj in anims) m.Clips.Add(ReadClip(aj));
                 return m;
@@ -134,7 +152,7 @@ namespace HappyWorld.Core.Art
 
             private GlbNode ReadNode(JObject nj)
             {
-                var n = new GlbNode { Name = (string)nj["name"] ?? "", Mesh = (int?)nj["mesh"] ?? -1 };
+                var n = new GlbNode { Name = (string)nj["name"] ?? "", Mesh = (int?)nj["mesh"] ?? -1, Skin = (int?)nj["skin"] ?? -1 };
                 var children = nj["children"] as JArray;
                 n.Children = children == null ? new int[0] : children.ToInts();
                 var t = Floats(nj["translation"], 0, 0, 0);
@@ -166,6 +184,22 @@ namespace HappyWorld.Core.Art
                     for (int i = 1; i < p.Uvs.Length; i += 2) p.Uvs[i] = 1f - p.Uvs[i];
                 }
                 int vertexCount = p.Positions.Length / 3;
+                if (attrs["JOINTS_0"] != null && attrs["WEIGHTS_0"] != null)
+                {
+                    var j = ReadFloats((int)attrs["JOINTS_0"], 4);
+                    p.Joints = new int[j.Length];
+                    for (int i = 0; i < j.Length; i++) p.Joints[i] = (int)j[i];
+                    p.Weights = ReadFloats((int)attrs["WEIGHTS_0"], 4);
+                    if (p.Joints.Length != vertexCount * 4 || p.Weights.Length != vertexCount * 4) throw new InvalidDataException("joints/weights do not match the vertices");
+                }
+                if (pj["targets"] is JArray targets)
+                    foreach (JObject tj in targets)
+                    {
+                        var d = tj["POSITION"] != null ? ReadFloats((int)tj["POSITION"], 3) : new float[vertexCount * 3];
+                        if (d.Length != vertexCount * 3) throw new InvalidDataException("morph target does not match the vertices");
+                        for (int i = 0; i < d.Length; i += 3) d[i] = -d[i];
+                        p.Targets.Add(d);
+                    }
                 int[] idx;
                 if (pj["indices"] != null) idx = ReadInts((int)pj["indices"]);
                 else
@@ -184,6 +218,15 @@ namespace HappyWorld.Core.Art
                 p.Indices = idx;
                 var mat = pj["material"] != null ? _j["materials"]?[(int)pj["material"]] : null;
                 var factor = mat?["pbrMetallicRoughness"]?["baseColorFactor"] as JArray;
+                if (mat != null)
+                {
+                    p.MaterialName = (string)mat["name"];
+                    p.MaterialExtras = mat["extras"] as JObject;
+                    var tex = (int?)mat["pbrMetallicRoughness"]?["baseColorTexture"]?["index"];
+                    var src = tex != null ? (int?)_j["textures"]?[tex.Value]?["source"] : null;
+                    var uri = src != null ? (string)_j["images"]?[src.Value]?["uri"] : null;
+                    if (uri != null) p.Image = uri.Substring(uri.LastIndexOfAny(new[] { '/', '\\' }) + 1);
+                }
                 if (factor != null) p.BaseColor = new[] { (float)factor[0], (float)factor[1], (float)factor[2], (float)factor[3] };
                 return p;
             }
@@ -332,6 +375,8 @@ namespace HappyWorld.Core.Art
     {
         public string Name;
         public int Mesh = -1;
+        /// <summary>Index into <see cref="GlbModel.Skins"/> when this node's mesh is skinned, else -1.</summary>
+        public int Skin = -1;
         public int[] Children = new int[0];
         /// <summary>Rest pose in Unity space: translation xyz, rotation quaternion xyzw, scale xyz.</summary>
         public float[] T, R, S;
@@ -341,6 +386,14 @@ namespace HappyWorld.Core.Art
     {
         public string Name;
         public readonly List<GlbPrimitive> Primitives = new List<GlbPrimitive>();
+        /// <summary>Morph target names (mesh extras "targetNames"), same order as each primitive's Targets.</summary>
+        public readonly List<string> TargetNames = new List<string>();
+    }
+
+    /// <summary>A skin: JOINTS_0 values index <see cref="Joints"/>, which are node indices.</summary>
+    public sealed class GlbSkin
+    {
+        public int[] Joints;
     }
 
     public sealed class GlbPrimitive
@@ -348,6 +401,15 @@ namespace HappyWorld.Core.Art
         public float[] Positions, Normals, Uvs;
         public int[] Indices;
         public int Material = -1;
+        /// <summary>4 joints and 4 weights per vertex when skinned, else null.</summary>
+        public int[] Joints;
+        public float[] Weights;
+        /// <summary>Morph targets: position deltas (xyz per vertex).</summary>
+        public readonly List<float[]> Targets = new List<float[]>();
+        public string MaterialName;
+        /// <summary>File name of the base colour texture ("female_face.png"), null when untextured.</summary>
+        public string Image;
+        public JObject MaterialExtras;
         /// <summary>The material's base colour factor (RGBA), multiplied with the texture.</summary>
         public float[] BaseColor = { 1, 1, 1, 1 };
         public int VertexCount => Positions.Length / 3;

@@ -15,7 +15,9 @@ namespace HappyWorld.Core.Tests
         [Fact]
         public void EveryBundledModelParses()
         {
-            var files = Directory.GetFiles(ModelsDir, "*.bytes", SearchOption.AllDirectories);
+            // the anime avatars have their own textures and checks (AvatarTests)
+            var files = Directory.GetFiles(ModelsDir, "*.bytes", SearchOption.AllDirectories)
+                .Where(f => !f.Replace('\\', '/').Contains("/avatar/")).ToArray();
             Assert.True(files.Length >= 10, "models missing: " + ModelsDir);
             foreach (var f in files)
             {

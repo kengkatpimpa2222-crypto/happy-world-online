@@ -28,6 +28,13 @@ describe('Player profile, wallet, inventory', () => {
     expect(res.body.avatar).toMatchObject({ bodyColor: '#AABBCC', hairItemId: 'hair_short_brown', outfitItemId: 'outfit_basic_tee' });
   });
 
+  it('stores the anime body type and keeps it when other avatar fields change', async () => {
+    await http().patch('/api/v1/player/profile').set(p.auth).send({ avatar: { bodyType: 'male' } }).expect(200);
+    const res = await http().patch('/api/v1/player/profile').set(p.auth).send({ avatar: { bodyColor: '#E0A47A' } }).expect(200);
+    expect(res.body.avatar).toMatchObject({ bodyType: 'male', bodyColor: '#E0A47A' });
+    await http().patch('/api/v1/player/profile').set(p.auth).send({ avatar: { bodyType: 'robot' } }).expect(400);
+  });
+
   it('refuses to wear an item the player does not own', async () => {
     const res = await http().patch('/api/v1/player/profile').set(p.auth).send({ avatar: { outfitItemId: 'outfit_star_idol' } }).expect(409);
     expect(res.body.error.code).toBe('ITEM_NOT_OWNED');

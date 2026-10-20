@@ -1,5 +1,6 @@
 using HappyWorld.Core.Api;
 using Avatar = HappyWorld.Core.Api.Avatar; // UnityEngine also has an Avatar type
+using HappyWorld.Core.Art;
 using HappyWorld.Unity.Art;
 using Newtonsoft.Json.Linq;
 using UnityEngine;
@@ -7,14 +8,17 @@ using UnityEngine;
 namespace HappyWorld.Unity.World
 {
     /// <summary>
-    /// A player: the Kenney character dressed in the avatar's colours (<see cref="CharacterRig"/>), nameplate and
-    /// chat bubble. Falls back to the original primitive figure if the model can't load.
+    /// A player: an anime-style 3D human (<see cref="AnimeAvatar"/>) wearing the avatar's outfit, hair and hat,
+    /// with nameplate and chat bubble. If that art can't load it falls back to the Kenney character dressed in
+    /// the avatar's colours (<see cref="CharacterRig"/>), and then to the original primitive figure.
     /// </summary>
     public sealed class AvatarView : MonoBehaviour
     {
         public string UserId;
         private Renderer _body, _shirt, _hair, _hat;
         private CharacterRig _rig;
+        private AnimeAvatar _anime;
+        private bool _fallbackBuilt;
         private TextMesh _name, _bubble;
         private float _bubbleUntil;
 
@@ -24,17 +28,8 @@ namespace HappyWorld.Unity.World
             root.transform.SetParent(parent, false);
             var v = root.AddComponent<AvatarView>();
             v.UserId = userId;
-            v._rig = CharacterRig.Create(root.transform);
-            if (v._rig != null)
-            {
-                v._hat = CityBuilder.Prim(PrimitiveType.Cylinder, v._rig.Torso != null ? v._rig.Torso : root.transform, Vector3.zero, Vector3.one, Color.yellow, "Hat").GetComponent<Renderer>();
-                var ht = v._hat.transform;
-                ht.localPosition = v._rig.HatLocalPos + Vector3.down * 0.08f; // brim around the antenna
-                ht.localScale = new Vector3(0.75f, 0.02f, 0.75f);
-            }
-            else BuildPrimitives(v, root);
-            // one generous capsule on the root instead of the primitives' own colliders
-            foreach (var c in root.GetComponentsInChildren<Collider>()) Object.Destroy(c);
+            v._anime = AnimeAvatar.Create(root.transform, AvatarLooks.BodyType(null, userId));
+            if (v._anime == null) v.BuildFallback();
             var col = root.AddComponent<CapsuleCollider>();
             col.center = new Vector3(0, 1f, 0);
             col.height = 2.2f;
@@ -44,6 +39,25 @@ namespace HappyWorld.Unity.World
             v._bubble = CityBuilder.Label(root.transform, new Vector3(0, 3.1f, 0), "", 0.14f, new Color(1f, 1f, 0.6f));
             v.SetName(displayName, level, false);
             return v;
+        }
+
+        /// <summary>The older looks, used only when the anime avatar's art is missing from the build.</summary>
+        private void BuildFallback()
+        {
+            if (_fallbackBuilt) return;
+            _fallbackBuilt = true;
+            _rig = CharacterRig.Create(transform);
+            if (_rig != null)
+            {
+                _hat = CityBuilder.Prim(PrimitiveType.Cylinder, _rig.Torso != null ? _rig.Torso : transform, Vector3.zero, Vector3.one, Color.yellow, "Hat").GetComponent<Renderer>();
+                var ht = _hat.transform;
+                ht.localPosition = _rig.HatLocalPos + Vector3.down * 0.08f; // brim around the antenna
+                ht.localScale = new Vector3(0.75f, 0.02f, 0.75f);
+            }
+            else BuildPrimitives(this, gameObject);
+            // the root's one generous capsule replaces the primitives' own colliders
+            foreach (var c in GetComponentsInChildren<Collider>())
+                if (c.gameObject != gameObject) Object.Destroy(c);
         }
 
         private static void BuildPrimitives(AvatarView v, GameObject root)
@@ -62,16 +76,33 @@ namespace HappyWorld.Unity.World
             _name.text = (isFriend ? "♥ " : "") + displayName + "  Lv." + level;
         }
 
-        public void ApplyAvatar(Avatar a) => Apply(a?.bodyColor, a?.outfitItemId, a?.hairItemId, a?.accessoryItemId);
+        public void ApplyAvatar(Avatar a) => Apply(a?.bodyType, a?.bodyColor, a?.outfitItemId, a?.hairItemId, a?.accessoryItemId);
 
         public void ApplyAvatar(JToken a)
         {
-            if (a == null || a.Type != JTokenType.Object) { Apply(null, null, null, null); return; }
-            Apply((string)a["bodyColor"], (string)a["outfitItemId"], (string)a["hairItemId"], (string)a["accessoryItemId"]);
+            if (a == null || a.Type != JTokenType.Object) { Apply(null, null, null, null, null); return; }
+            Apply((string)a["bodyType"], (string)a["bodyColor"], (string)a["outfitItemId"], (string)a["hairItemId"], (string)a["accessoryItemId"]);
         }
 
-        private void Apply(string bodyColor, string outfit, string hair, string accessory)
+        private void Apply(string bodyType, string bodyColor, string outfit, string hair, string accessory)
         {
+            var shape = AvatarLooks.BodyType(bodyType, UserId);
+            if (_anime != null && _anime.Body != shape)
+            {
+                var next = AnimeAvatar.Create(transform, shape);
+                if (next != null)
+                {
+                    Destroy(_anime.gameObject);
+                    _anime = next;
+                }
+            }
+            if (_anime != null)
+            {
+                float r, g, b;
+                AvatarLooks.SkinTint(bodyColor, out r, out g, out b);
+                _anime.Dress(AvatarLooks.Outfit(shape, outfit), AvatarLooks.Hair(shape, hair), AvatarLooks.Hat(shape, accessory), new Color(r, g, b, 1f));
+                return;
+            }
             Color body;
             if (string.IsNullOrEmpty(bodyColor) || !ColorUtility.TryParseHtmlString(bodyColor, out body)) body = new Color(0.4f, 0.6f, 1f);
             if (_rig != null)
@@ -105,6 +136,7 @@ namespace HappyWorld.Unity.World
 
         public void ShowChat(string text, float seconds = 4f)
         {
+            if (_anime != null) _anime.Smile(Mathf.Min(seconds, 3f));
             _bubble.text = text;
             _bubbleUntil = Time.time + seconds;
         }

@@ -53,7 +53,7 @@ curl -s -XPOST $API/businesses/$SHOP/sell -H "authorization: Bearer $TOKEN"
 | POST | /auth/refresh | `{refreshToken}` → token pair ใหม่ (token เก่าใช้ไม่ได้อีก) |
 | POST | /auth/logout | 204, ยกเลิก session ปัจจุบัน |
 | GET | /player/profile | โปรไฟล์ เลเวล XP avatar friendCode |
-| PATCH | /player/profile | `{displayName?, avatar?, locale?}` avatar ใส่ได้เฉพาะไอเทมที่มี |
+| PATCH | /player/profile | `{displayName?, avatar?, locale?}` avatar ใส่ได้เฉพาะไอเทมที่มี, `avatar.bodyType` = `female` / `male` (รูปร่างตัวละครอนิเมะ) |
 | GET | /player/inventory | ไอเทมที่มี |
 | GET | /player/wallet | ยอด GOLD/GEMS + ธุรกรรมล่าสุด 20 รายการ |
 | GET | /quests | ภารกิจทั้งหมด + ความคืบหน้า + canStart |

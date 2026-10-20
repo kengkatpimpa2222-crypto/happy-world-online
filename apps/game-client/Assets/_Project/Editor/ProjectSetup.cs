@@ -85,6 +85,8 @@ namespace HappyWorld.EditorTools
                 "Legacy Shaders/Diffuse", "Unlit/Color", "Skybox/Procedural",
                 "UI/Default", "Sprites/Default", "Sprites/Mask",
                 "Hidden/CubeBlur", "Hidden/CubeCopy", "Hidden/CubeBlend",
+                // anime avatars: their own toon shader (also in Resources) and its fallback
+                "HappyWorld/AnimeToon", "Legacy Shaders/Transparent/Cutout/Diffuse",
             };
             var settings = AssetDatabase.LoadAssetAtPath<UnityEngine.Object>("ProjectSettings/GraphicsSettings.asset");
             var so = new SerializedObject(settings);

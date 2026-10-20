@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using HappyWorld.Core.Api;
+using HappyWorld.Core.Art;
 using HappyWorld.Core.Realtime;
 using HappyWorld.Core.World;
 using HappyWorld.Unity.Art;
@@ -207,10 +208,19 @@ namespace HappyWorld.Unity.World
         }
     }
 
-    /// <summary>An NPC customer: simple primitive body coloured by customer type, label, speech bubble.</summary>
+    /// <summary>
+    /// An NPC customer: an anime human dressed for its customer type (students in uniform, tourists in straw
+    /// hats...), with a label and speech bubble. A crowd is heavy for a phone, so only the first
+    /// <see cref="MaxAnime"/> customers on screen are anime humans (without hair sway); the rest, and every
+    /// customer if the models fail to load, use the old Kenney / primitive figure.
+    /// </summary>
     public sealed class NpcView : MonoBehaviour
     {
+        private const int MaxAnime = 16;
+        private static int _animeCount;
+
         public NpcPlan Plan { get; private set; }
+        private bool _anime;
         public bool Reacted;
         private TextMesh _bubble;
         private bool _bubbleShown;
@@ -232,8 +242,11 @@ namespace HappyWorld.Unity.World
                 default: shirt = Color.white; hair = Color.black; break;
             }
             var t = root.transform;
-            var rig = CharacterRig.Create(t);
-            if (rig != null)
+            if (_animeCount < MaxAnime && v.TryAnime(plan))
+            {
+                // dressed in TryAnime
+            }
+            else if (CharacterRig.Create(t) is CharacterRig rig)
             {
                 foreach (var c in rig.GetComponentsInChildren<Collider>()) Destroy(c);
                 rig.transform.localScale *= 0.85f; // customers a touch smaller than players
@@ -262,6 +275,27 @@ namespace HappyWorld.Unity.World
             t.localPosition = new Vector3(x, 0.05f, y);
             root.SetActive(false); // appears when its walk starts
             return v;
+        }
+
+        private bool TryAnime(NpcPlan plan)
+        {
+            string body, outfit, hair, accessory, skin;
+            AvatarLooks.Customer(plan.Visit.customerType, plan.Id, out body, out outfit, out hair, out accessory, out skin);
+            var anime = AnimeAvatar.Create(transform, body);
+            if (anime == null) return false;
+            anime.Sway = false;
+            anime.transform.localScale = Vector3.one * 0.95f;
+            float r, g, b;
+            AvatarLooks.SkinTint(skin, out r, out g, out b);
+            anime.Dress(AvatarLooks.Outfit(body, outfit), AvatarLooks.Hair(body, hair), AvatarLooks.Hat(body, accessory), new Color(r, g, b, 1f));
+            _anime = true;
+            _animeCount++;
+            return true;
+        }
+
+        private void OnDestroy()
+        {
+            if (_anime) _animeCount--;
         }
 
         private static void Strip(GameObject go) => Destroy(go.GetComponent<Collider>()); // NPCs are not tappable

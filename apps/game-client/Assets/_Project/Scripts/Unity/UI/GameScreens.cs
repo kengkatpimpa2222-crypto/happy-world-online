@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using HappyWorld.Core.Api;
+using HappyWorld.Core.Art;
 using Avatar = HappyWorld.Core.Api.Avatar; // UnityEngine also has an Avatar type
 using HappyWorld.Core.Localization;
 using HappyWorld.Core.Minigames;
@@ -47,7 +48,8 @@ namespace HappyWorld.Unity.UI
         public VirtualJoystick Joystick { get; private set; }
         public bool ModalOpen => _modalLayer.childCount > 0;
 
-        private static readonly string[] BodyColors = { "#F5C6A5", "#E0A47A", "#B97A56", "#8D5524", "#6FA8DC", "#93C47D", "#F6B26B", "#C27BA0" };
+        // skin tones for the anime avatars (an older saved colour that isn't one still shows the painted skin)
+        private static readonly string[] BodyColors = AvatarLooks.SkinTones;
 
         public GameScreens(GameSession session)
         {
@@ -151,13 +153,34 @@ namespace HappyWorld.Unity.UI
 
             var avatar = new Avatar
             {
+                bodyType = AvatarLooks.BodyType(profile.avatar != null ? profile.avatar.bodyType : null, profile.userId),
                 bodyColor = profile.avatar != null && profile.avatar.bodyColor != null ? profile.avatar.bodyColor : BodyColors[0],
                 outfitItemId = profile.avatar != null ? profile.avatar.outfitItemId : null,
                 hairItemId = profile.avatar != null ? profile.avatar.hairItemId : null,
                 accessoryItemId = profile.avatar != null ? profile.avatar.accessoryItemId : null,
             };
 
-            UiKit.Label(card, Texts.T("ui.color"), 30).rectTransform.Place(new Vector2(0.06f, 0.63f), new Vector2(0.94f, 0.69f));
+            // body type (the anime avatar's shape), then skin tone
+            UiKit.Label(card, "รูปร่าง", 30).rectTransform.Place(new Vector2(0.06f, 0.63f), new Vector2(0.3f, 0.69f));
+            var shapes = new List<Outline>();
+            var shapeIds = new[] { AvatarLooks.Female, AvatarLooks.Male };
+            var shapeNames = new[] { "หญิง", "ชาย" };
+            for (int i = 0; i < shapeIds.Length; i++)
+            {
+                var id = shapeIds[i];
+                var sb = UiKit.Button(card, shapeNames[i], UiKit.Primary, () => { }, 30);
+                sb.GetComponent<RectTransform>().Place(new Vector2(0.32f + i * 0.31f, 0.625f), new Vector2(0.6f + i * 0.31f, 0.695f));
+                var so = sb.gameObject.AddComponent<Outline>();
+                so.effectDistance = new Vector2(5, 5);
+                so.effectColor = id == avatar.bodyType ? UiKit.Ink : Color.clear;
+                shapes.Add(so);
+                sb.onClick.AddListener(() =>
+                {
+                    avatar.bodyType = id;
+                    foreach (var o in shapes) o.effectColor = Color.clear;
+                    so.effectColor = UiKit.Ink;
+                });
+            }
             var swatches = new List<Outline>();
             for (int i = 0; i < BodyColors.Length; i++)
             {

@@ -49,6 +49,8 @@ export const displayNameSchema = z
 
 export const avatarSchema = z
   .object({
+    /** Anime avatar body (client art); avatars saved before it existed have none and get one picked from the user id. */
+    bodyType: z.enum(['female', 'male']).nullable().optional(),
     bodyColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/).optional(),
     outfitItemId: z.string().max(64).nullable().optional(),
     hairItemId: z.string().max(64).nullable().optional(),
