@@ -59,6 +59,32 @@ namespace HappyWorld.Core.Art
             accessoryItemId == "acc_straw_hat" ? "avatar/" + body + "_hat_straw" : null;
 
         /// <summary>
+        /// What a market customer (NPC) wears, as the same item ids a player saves: picked from the customer type,
+        /// with body, hair and skin varied by the NPC id so a crowd isn't all twins but one customer never changes.
+        /// </summary>
+        public static void Customer(string customerType, string npcId, out string body, out string outfit, out string hair,
+            out string accessory, out string skin)
+        {
+            uint h = 2166136261;
+            foreach (var c in npcId ?? "") h = (h ^ c) * 16777619;
+            h ^= h >> 13;
+            body = (h & 1) == 0 ? Female : Male;
+            accessory = null;
+            switch (customerType)
+            {
+                case "STUDENT": outfit = "outfit_school_uniform"; break;
+                case "TOURIST": outfit = "outfit_basic_tee"; accessory = "acc_straw_hat"; break;
+                case "GRANDMA": outfit = "outfit_thai_silk"; body = Female; break;
+                case "FESTIVAL_GOER": outfit = "outfit_star_idol"; break;
+                case "WORKER": outfit = (h & 2) == 0 ? "outfit_basic_tee" : null; break;
+                default: outfit = null; break;
+            }
+            var hairs = new[] { "hair_long_black", "hair_short_brown", null };
+            hair = hairs[(h >> 2) % 3];
+            skin = SkinTones[(h >> 4) % (uint)SkinTones.Length];
+        }
+
+        /// <summary>
         /// Multiplier for the skin texture so it shows the chosen tone (the textures are painted at SkinTones[0]).
         /// Colours that are not skin tones (the old creator also offered blue, green...) keep the painted skin.
         /// </summary>

@@ -245,5 +245,27 @@ namespace HappyWorld.Core.Tests
             (Rot.AroundY(90) * Rot.AroundX(90)).Apply(0, 0, 1, out x, out y, out z); // X first, then Y
             Assert.InRange(y, -1.001f, -0.999f);
         }
+
+        [Fact]
+        public void MarketCustomersDressForTheirTypeAndStayTheSame()
+        {
+            var bodies = new System.Collections.Generic.HashSet<string>();
+            foreach (var type in new[] { "STUDENT", "WORKER", "TOURIST", "GRANDMA", "FESTIVAL_GOER", "SOMETHING_NEW" })
+                for (int n = 0; n < 20; n++)
+                {
+                    string body, outfit, hair, acc, skin, body2, outfit2, hair2, acc2, skin2;
+                    AvatarLooks.Customer(type, "npc-" + n, out body, out outfit, out hair, out acc, out skin);
+                    AvatarLooks.Customer(type, "npc-" + n, out body2, out outfit2, out hair2, out acc2, out skin2);
+                    Assert.Equal((body, outfit, hair, acc, skin), (body2, outfit2, hair2, acc2, skin2));
+                    Assert.Contains(skin, AvatarLooks.SkinTones);
+                    bodies.Add(body);
+                    // every pick maps to a part that ships (checked for all looks in the first test)
+                    Assert.NotNull(AvatarLooks.Outfit(body, outfit));
+                    if (type == "STUDENT") Assert.Equal("outfit_school_uniform", outfit);
+                    if (type == "TOURIST") Assert.Equal("acc_straw_hat", acc);
+                    if (type == "GRANDMA") Assert.Equal("female", body);
+                }
+            Assert.Equal(2, bodies.Count);
+        }
     }
 }

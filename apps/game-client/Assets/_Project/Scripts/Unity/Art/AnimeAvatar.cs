@@ -32,6 +32,9 @@ namespace HappyWorld.Unity.Art
             public readonly List<Transform> Bones = new List<Transform>();
         }
 
+        /// <summary>Hair/skirt sway on or off (off for market customers: there can be dozens and nobody looks closely).</summary>
+        public bool Sway = true;
+
         private static readonly Dictionary<string, UnityEngine.Avatar> Avatars = new Dictionary<string, UnityEngine.Avatar>();
 
         public string Body { get; private set; }
@@ -330,7 +333,7 @@ namespace HappyWorld.Unity.Art
             _hips.localPosition = _hipsRest + new Vector3(_gait.HipsX, _gait.HipsY, _gait.HipsZ);
 
             var cam = Camera.main;
-            if (cam == null || (cam.transform.position - pos).sqrMagnitude < SpringDistance * SpringDistance) _springs.Tick(dt);
+            if (Sway && (cam == null || (cam.transform.position - pos).sqrMagnitude < SpringDistance * SpringDistance)) _springs.Tick(dt);
             else _springs.Reset();
 
             Face(dt);
