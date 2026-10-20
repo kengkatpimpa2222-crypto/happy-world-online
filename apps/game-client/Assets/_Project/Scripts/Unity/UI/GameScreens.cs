@@ -877,17 +877,30 @@ namespace HappyWorld.Unity.UI
             if (!d.IsLast)
                 UiKit.Button(nav, "ถัดไป ▶", UiKit.Primary, () => { d.Next(); ShowShift(d); }, 28).gameObject.AddComponent<LayoutElement>().flexibleWidth = 1;
             else
-                UiKit.Button(nav, Texts.T("ui.hand_in"), UiKit.Good, () => _s.Run(async () =>
+            {
+                // The server pays a shift once, but each tap of a fast double-tap used to toast "ได้ค่าแรง" again (Phase 12 QA)
+                var sending = false;
+                UiKit.Button(nav, Texts.T("ui.hand_in"), UiKit.Good, () =>
                 {
-                    // a TOO_EARLY / EXPIRED answer shows as a toast and leaves the answers as they are
-                    var r = await _s.Api.FinishJobShiftAsync(d.Shift.id, d.Answers);
-                    Audio.GameAudio.Sfx(r.result.paid ? "sfx_coin" : "sfx_pop");
-                    Toast(JobPresenter.FinishToast(r.result));
-                    ApplyLevel(r.result.playerLevel);
-                    ShowPayslip(r);
-                    RefreshHud();
-                    _s.RefreshJobs();
-                }), 28).gameObject.AddComponent<LayoutElement>().flexibleWidth = 1;
+                    if (sending) return;
+                    sending = true;
+                    _s.Run(async () =>
+                    {
+                        try
+                        {
+                            // a TOO_EARLY / EXPIRED answer shows as a toast and leaves the answers as they are
+                            var r = await _s.Api.FinishJobShiftAsync(d.Shift.id, d.Answers);
+                            Audio.GameAudio.Sfx(r.result.paid ? "sfx_coin" : "sfx_pop");
+                            Toast(JobPresenter.FinishToast(r.result));
+                            ApplyLevel(r.result.playerLevel);
+                            ShowPayslip(r);
+                            RefreshHud();
+                            _s.RefreshJobs();
+                        }
+                        finally { sending = false; }
+                    });
+                }, 28).gameObject.AddComponent<LayoutElement>().flexibleWidth = 1;
+            }
         }
 
         /// <summary>The payslip: each task with its lesson, then the pay.</summary>
