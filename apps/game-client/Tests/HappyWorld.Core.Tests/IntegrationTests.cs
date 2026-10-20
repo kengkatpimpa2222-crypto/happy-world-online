@@ -329,6 +329,43 @@ namespace HappyWorld.Core.Tests
         }
 
         [Fact]
+        public async Task CashierShiftIsCheckedAndPaidOnceByTheServer()
+        {
+            if (Url == null) return;
+            var api = await NewGuest();
+            var o = await api.GetJobsAsync();
+            Assert.Contains(o.jobs, j => j.job == "CASHIER" && j.zone == "PLAZA" && j.unlocked);
+            Assert.Null(o.active);
+            var shift = await api.StartJobAsync("CASHIER");
+            Assert.Equal(5, shift.tasks.Count);
+            var draft = new ShiftDraft(shift);
+            for (int i = 0; i < shift.tasks.Count; i++)
+            {
+                // Thai coins and notes: biggest first gives the fewest pieces
+                var change = draft.Current.paid - draft.Current.total;
+                for (int slot = 0; slot < draft.Current.denominations.Count; slot++)
+                {
+                    var n = change / draft.Current.denominations[slot];
+                    draft.Add(slot, n);
+                    change -= n * draft.Current.denominations[slot];
+                }
+                draft.Next();
+            }
+            var early = await Assert.ThrowsAsync<ApiException>(() => api.FinishJobShiftAsync(shift.id, draft.Answers));
+            Assert.Equal("JOB_SHIFT_TOO_EARLY", early.Code);
+            await Task.Delay((shift.minSeconds + 1) * 1000);
+            var r = await api.FinishJobShiftAsync(shift.id, draft.Answers);
+            Assert.False(r.replayed);
+            Assert.True(r.result.paid);
+            Assert.True(r.result.checks.All(c => c.correct && c.perfect));
+            Assert.Equal(60, r.result.wageGold);
+            Assert.Equal("ทำถูก 5/5 งาน", JobPresenter.PayslipLines(r.result)[0]);
+            var again = await api.FinishJobShiftAsync(shift.id, draft.Answers);
+            Assert.True(again.replayed);
+            Assert.Equal(r.gold, (await api.GetWalletAsync()).Gold);
+        }
+
+        [Fact]
         public async Task BadTokenIsRefused()
         {
             if (Url == null) return;

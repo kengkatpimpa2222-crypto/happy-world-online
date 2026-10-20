@@ -10,3 +10,4 @@ export * from './adventure';
 export * from './home';
 export * from './quest-objectives';
 export * from './daily';
+export * from './jobs';

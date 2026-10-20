@@ -26,6 +26,9 @@ namespace HappyWorld.Unity.World
             ["MARKET"] = new Color(0.86f, 0.76f, 0.56f),
             ["ACTIVITY"] = new Color(0.50f, 0.72f, 0.85f),
             ["MINIGAME_GATE"] = new Color(0.80f, 0.65f, 0.88f),
+            // Phase 12
+            ["COUNTRYSIDE"] = new Color(0.58f, 0.80f, 0.38f),
+            ["INDUSTRIAL"] = new Color(0.70f, 0.70f, 0.68f),
         };
 
         private static Material _baseMat;
@@ -68,7 +71,8 @@ namespace HappyWorld.Unity.World
             return go;
         }
 
-        public static List<PortalInfo> Build(Zone zone, Transform root)
+        /// <param name="keepClear">spots (workplaces, Phase 12) that random trees and houses stay away from</param>
+        public static List<PortalInfo> Build(Zone zone, Transform root, IEnumerable<Vector3> keepClear = null)
         {
             for (int i = root.childCount - 1; i >= 0; i--) Object.Destroy(root.GetChild(i).gameObject);
             float w = zone.width, h = zone.height;
@@ -110,12 +114,18 @@ namespace HappyWorld.Unity.World
                 bool nearPortal = false;
                 foreach (var p in portals) if (Vector3.Distance(pos, p.Position) < 5) nearPortal = true;
                 if (nearPortal) continue;
+                bool nearWork = false;
+                if (keepClear != null) foreach (var c in keepClear) if (Vector3.Distance(pos, c) < 10) nearWork = true;
+                if (nearWork) continue;
                 // Market: stalls (x 7..38) and the y=20 walkway NPC customers use come from the server, so keep
                 // random houses/trees out of that area (on device a house stood in the walkway, Phase 5 QA).
                 if (zone.id == "MARKET" && pos.x > 6) continue;
                 // Homes (Phase 10): the street and its twelve plots are built by HomeDistrictView
                 if (zone.id == "HOMES" && pos.z > 9f && pos.z < 28.5f && pos.x < 35f) continue;
                 var roll = rnd.NextDouble();
+                // the Countryside is fields and trees, the Industrial zone warehouses and few trees
+                if (zone.id == "COUNTRYSIDE") roll *= 0.75;
+                if (zone.id == "INDUSTRIAL") roll = 0.4 + roll * 0.6;
                 if (roll < 0.45) Tree(root, pos, rnd);
                 else if (roll < 0.6) Bushes(root, pos, rnd);
                 else House(root, pos, rnd);
@@ -218,7 +228,7 @@ namespace HappyWorld.Unity.World
             var tex = new Texture2D(size, size, TextureFormat.RGB24, true) { wrapMode = TextureWrapMode.Repeat, filterMode = FilterMode.Bilinear, name = "Ground_" + zoneId };
             var rnd = new System.Random(zoneId.GetHashCode());
             var px = new Color[size * size];
-            bool paved = zoneId == "MARKET" || zoneId == "MINIGAME_GATE";
+            bool paved = zoneId == "MARKET" || zoneId == "MINIGAME_GATE" || zoneId == "INDUSTRIAL";
             for (int y = 0; y < size; y++)
                 for (int x = 0; x < size; x++)
                 {

@@ -192,6 +192,14 @@ namespace HappyWorld.Core.Api
         public Task<CraftResult> CraftAsync(string businessId, string recipe, int times, string idempotencyKey) =>
             SendAsync<CraftResult>("POST", "/crafting/craft", new { recipe, businessId, times }, idempotencyKey: idempotencyKey);
 
+        // ---------- Part-time jobs (Phase 12) ----------
+        public Task<JobsOverview> GetJobsAsync() => SendAsync<JobsOverview>("GET", "/jobs");
+        /// <summary>Starting the job of my open shift again hands that shift back (resumed = true).</summary>
+        public Task<JobShift> StartJobAsync(string job) => SendAsync<JobShift>("POST", "/jobs/start", new { job });
+        /// <summary>Safe to retry: the shift id makes it idempotent (the first payslip comes back).</summary>
+        public Task<JobFinishResult> FinishJobShiftAsync(string shiftId, List<List<int>> answers) =>
+            SendAsync<JobFinishResult>("POST", "/jobs/shifts/" + shiftId + "/finish", new { answers });
+
         // ---------- First home (Phase 10) ----------
         public Task<HomeView> GetMyHomeAsync() => SendAsync<HomeView>("GET", "/homes/me");
         /// <summary>Once only; a second call answers HOME_ALREADY_CLAIMED (then just read GET /homes/me).</summary>

@@ -44,6 +44,9 @@ export const CITY_ZONES: readonly ZoneConfig[] = [
       { to: 'MARKET', x: 55, y: 30 },
       { to: 'ACTIVITY', x: 30, y: 55 },
       { to: 'MINIGAME_GATE', x: 30, y: 5 },
+      // Phase 12: the GDD's zones E (Countryside) and D (Industrial), in the Plaza's two south corners
+      { to: 'COUNTRYSIDE', x: 6, y: 54 },
+      { to: 'INDUSTRIAL', x: 54, y: 54 },
     ],
     capacity: 50,
   },
@@ -51,6 +54,8 @@ export const CITY_ZONES: readonly ZoneConfig[] = [
   { id: 'MARKET', nameKey: 'zone.market', width: 40, height: 40, spawn: { x: 5, y: 20 }, portals: [{ to: 'PLAZA', x: 2, y: 20 }], capacity: 40 },
   { id: 'ACTIVITY', nameKey: 'zone.activity', width: 50, height: 40, spawn: { x: 25, y: 5 }, portals: [{ to: 'PLAZA', x: 25, y: 2 }], capacity: 40 },
   { id: 'MINIGAME_GATE', nameKey: 'zone.minigame_gate', width: 30, height: 30, spawn: { x: 15, y: 25 }, portals: [{ to: 'PLAZA', x: 15, y: 28 }], capacity: 30 },
+  { id: 'COUNTRYSIDE', nameKey: 'zone.countryside', width: 60, height: 50, spawn: { x: 10, y: 42 }, portals: [{ to: 'PLAZA', x: 4, y: 46 }], capacity: 40 },
+  { id: 'INDUSTRIAL', nameKey: 'zone.industrial', width: 50, height: 40, spawn: { x: 40, y: 32 }, portals: [{ to: 'PLAZA', x: 46, y: 36 }], capacity: 40 },
 ];
 export const ZONE_IDS = CITY_ZONES.map((z) => z.id) as [string, ...string[]];
 export function zoneById(id: string): ZoneConfig | undefined {

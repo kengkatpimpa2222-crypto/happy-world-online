@@ -11,5 +11,6 @@ import { SkillsService } from './skills.service';
   imports: [BusinessModule, QuestsModule],
   controllers: [ExpeditionController, CraftingController],
   providers: [ExpeditionService, CraftingService, SkillsService],
+  exports: [SkillsService],
 })
 export class AdventureModule {}

@@ -491,6 +491,7 @@ namespace HappyWorld.Unity.UI
         {
             var p = _s.Profile;
             if (p != null) _nameText.text = p.displayName + "  Lv." + p.level;
+            _s.RefreshLocalName();
             _s.RefreshDaily(); // most actions that move a mission end here (sell, collect, craft, claim)
             _s.Run(async () =>
             {
@@ -742,6 +743,9 @@ namespace HappyWorld.Unity.UI
                        (busy.Count > 0 ? "\nช่วงนี้มีลูกค้าเยอะ: " + string.Join(", ", busy) : "");
             var shopRow = UiKit.Row(list, "<size=24>" + line + "\n" + CityLifePresenter.ForecastLine(n, 3) + "</size>", 120);
             UiKit.RowButton(shopRow, "จัดร้าน", UiKit.Good, ShowShop, 150);
+            // Phase 12: part-time jobs at the Plaza minimart, the Countryside farm and the Industrial plant
+            UiKit.RowButton(UiKit.Row(list, "<b>" + Texts.T("ui.jobs") + "</b>\n<size=24>ทำงานสั้น ๆ ได้ค่าแรง ฝึกทอนเงิน คำนวณ และวางแผน</size>", 100),
+                "ดูงาน", UiKit.Primary, () => ShowJobs(), 150);
 
             // the city's projects
             UiKit.Row(list, "<b>เมืองของเราเติบโต</b>\n<size=24>ทุกชิ้นที่ขายได้ในตลาด = 1 แต้มสร้างเมือง · ทั้งเมืองมี " + g.points + " แต้ม · สร้างแล้ว " + g.builtCount + "/" + g.projects.Count + "</size>", 100);
@@ -762,6 +766,159 @@ namespace HappyWorld.Unity.UI
                 foreach (var h in g.top)
                     UiKit.Row(list, "<size=26>" + h.rank + ". " + FestivalPresenter.HelperName(h) + " · " + h.points + " แต้ม</size>", 60);
             }
+        }
+
+        // ---------- part-time jobs (Phase 12) ----------
+
+        private string JobName(string job)
+        {
+            var j = _s.Jobs != null ? _s.Jobs.jobs.FirstOrDefault(x => x.job == job) : null;
+            return j != null ? j.nameTh : job;
+        }
+
+        /// <summary>The job boards. atJob = the board the player stands at: a shift can be started there.</summary>
+        public void ShowJobs(string atJob = null)
+        {
+            var list = OpenModal(Texts.T("ui.jobs"));
+            Loading(list);
+            _s.Run(async () =>
+            {
+                var o = await _s.Api.GetJobsAsync();
+                _s.OnJobs(o);
+                UiKit.Clear(list);
+                UiKit.Row(list, JobPresenter.WorkerLine(o.worker) + "\n<size=24>" + JobPresenter.PaidLeftLine(o) + "</size>", 110);
+                if (o.active != null)
+                {
+                    var open = o.active;
+                    UiKit.RowButton(UiKit.Row(list, "มีกะ " + JobName(open.job) + " ค้างอยู่"), "ทำต่อ", UiKit.Good, () => ShowShift(new ShiftDraft(open)), 190);
+                }
+                foreach (var j in o.jobs)
+                {
+                    var row = UiKit.Row(list, JobPresenter.JobLine(j), 170);
+                    if (!j.unlocked) continue;
+                    var job = j;
+                    if (atJob == j.job)
+                        UiKit.RowButton(row, Texts.T("ui.start_shift"), UiKit.Good, () => _s.Run(async () =>
+                        {
+                            var shift = await _s.Api.StartJobAsync(job.job);
+                            ShowShift(new ShiftDraft(shift));
+                        }), 190);
+                    else if (_s.CurrentHome != null || _s.CurrentZone == null || _s.CurrentZone.id != j.zone)
+                        UiKit.RowButton(row, "ไป" + Texts.T("zone." + j.zone.ToLowerInvariant()), UiKit.Primary, () =>
+                        {
+                            CloseModal();
+                            Toast("เดินไปที่วงกลมสีส้มหน้าป้ายรับสมัครนะ");
+                            _s.Run(() => _s.JoinZoneAsync(job.zone));
+                        }, 190);
+                    else
+                        UiKit.RowButton(row, "อยู่ในโซนนี้", UiKit.Muted, () => { CloseModal(); Toast("เดินไปที่วงกลมสีส้มหน้าป้ายรับสมัครนะ"); }, 190);
+                }
+                if (o.recent.Count > 0)
+                {
+                    UiKit.Row(list, "<b>สลิปค่าแรงล่าสุด</b>  <size=24>รวมได้ " + o.totals.goldEarned + " ทอง จาก " + o.totals.paidShifts + " กะ</size>", 70);
+                    foreach (var r in o.recent)
+                    {
+                        if (r.result == null) continue;
+                        var done = r;
+                        var right = r.result.checks.Count(c => c.correct);
+                        var label = JobName(r.job) + "  <size=24>" + (r.result.paid ? r.result.wageGold + " ทอง" : "ฝึกฝน") + " · ถูก " + right + "/" + r.result.checks.Count + "</size>";
+                        UiKit.RowButton(UiKit.Row(list, label), "ดูสลิป", UiKit.Muted, () => ShowPayslip(done), 150);
+                    }
+                }
+            });
+        }
+
+        /// <summary>One task of the shift at a time; the answer is built with coin/box buttons or a crate counter.</summary>
+        private void ShowShift(ShiftDraft d)
+        {
+            var list = OpenModal(JobName(d.Shift.job));
+            var t = d.Current;
+            UiKit.Row(list, JobPresenter.TaskPrompt(t, d.Index, d.Count), 170);
+            UiKit.Row(list, "<b>" + d.RunningLine() + "</b>", 70);
+            var slots = JobPresenter.Slots(t);
+            var counts = d.CurrentCounts;
+            if (t.kind == "CASHIER")
+            {
+                // tap a note or coin to hand it over; notes in one row, coins in the next (big touch targets)
+                foreach (var group in new[] { slots.Where(v => v >= 20).ToList(), slots.Where(v => v < 20).ToList() })
+                {
+                    var row = UiKit.Row(list, "", 110);
+                    row.GetChild(0).gameObject.SetActive(false);
+                    foreach (var value in group)
+                    {
+                        var slot = slots.IndexOf(value);
+                        var b = UiKit.Button(row, JobPresenter.SlotLabel(t, value) + (counts[slot] > 0 ? " ×" + counts[slot] : ""), value >= 20 ? UiKit.Good : UiKit.Accent, () =>
+                        {
+                            d.Add(slot);
+                            ShowShift(d);
+                        }, 28);
+                        b.gameObject.AddComponent<LayoutElement>().flexibleWidth = 1;
+                    }
+                }
+                UiKit.RowButton(UiKit.Row(list, "<size=24>ให้ผิด? ล้างแล้วนับใหม่ได้</size>", 80), "ล้าง", UiKit.Muted, () =>
+                {
+                    d.Clear();
+                    ShowShift(d);
+                }, 150);
+            }
+            else
+            {
+                for (int i = 0; i < slots.Count; i++)
+                {
+                    var slot = i;
+                    var row = UiKit.Row(list, JobPresenter.SlotLabel(t, slots[i]) + (t.kind == "PACKER" ? " ชิ้น" : "") + ":  <b>" + counts[i] + "</b>", 96);
+                    UiKit.RowButton(row, "−", UiKit.Muted, () => { d.Add(slot, -1); ShowShift(d); }, 110);
+                    UiKit.RowButton(row, "+", UiKit.Primary, () => { d.Add(slot, 1); ShowShift(d); }, 110);
+                }
+            }
+            var nav = UiKit.Row(list, "", 100);
+            nav.GetChild(0).gameObject.SetActive(false);
+            if (d.Index > 0)
+                UiKit.Button(nav, "◀ ก่อนหน้า", UiKit.Muted, () => { d.Back(); ShowShift(d); }, 28).gameObject.AddComponent<LayoutElement>().flexibleWidth = 1;
+            if (!d.IsLast)
+                UiKit.Button(nav, "ถัดไป ▶", UiKit.Primary, () => { d.Next(); ShowShift(d); }, 28).gameObject.AddComponent<LayoutElement>().flexibleWidth = 1;
+            else
+            {
+                // The server pays a shift once, but each tap of a fast double-tap used to toast "ได้ค่าแรง" again (Phase 12 QA)
+                var sending = false;
+                UiKit.Button(nav, Texts.T("ui.hand_in"), UiKit.Good, () =>
+                {
+                    if (sending) return;
+                    sending = true;
+                    _s.Run(async () =>
+                    {
+                        try
+                        {
+                            // a TOO_EARLY / EXPIRED answer shows as a toast and leaves the answers as they are
+                            var r = await _s.Api.FinishJobShiftAsync(d.Shift.id, d.Answers);
+                            Audio.GameAudio.Sfx(r.result.paid ? "sfx_coin" : "sfx_pop");
+                            Toast(JobPresenter.FinishToast(r.result));
+                            ApplyLevel(r.result.playerLevel);
+                            ShowPayslip(r);
+                            RefreshHud();
+                            _s.RefreshJobs();
+                        }
+                        finally { sending = false; }
+                    });
+                }, 28).gameObject.AddComponent<LayoutElement>().flexibleWidth = 1;
+            }
+        }
+
+        /// <summary>The payslip: each task with its lesson, then the pay.</summary>
+        private void ShowPayslip(JobShift s)
+        {
+            var list = OpenModal("สลิปค่าแรง · " + JobName(s.job));
+            var r = s.result;
+            for (int i = 0; i < r.checks.Count && i < s.tasks.Count; i++)
+            {
+                var t = s.tasks[i];
+                var head = t.kind == "CASHIER" ? JobPresenter.Bill(t) + " จ่าย " + t.paid : t.kind == "PACKER" ? "ออร์เดอร์ " + t.quantity + " ชิ้น" : "ผลผลิต " + t.rowsKg.Sum() + " กก.";
+                UiKit.Row(list, "<size=24>" + (i + 1) + ". " + head + "</size>\n" + JobPresenter.Explain(t, r.checks[i]), 120);
+            }
+            UiKit.Row(list, string.Join("\n", JobPresenter.PayslipLines(r)), 60 + 34 * JobPresenter.PayslipLines(r).Count);
+            var here = _s.JobBoardHere();
+            if (here != null)
+                UiKit.RowButton(UiKit.Row(list, "ทำอีกกะไหม?"), "บอร์ดงาน", UiKit.Primary, () => ShowJobs(here), 190);
         }
 
         // ---------- modal ----------

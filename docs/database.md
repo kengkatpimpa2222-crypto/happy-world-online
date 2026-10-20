@@ -99,3 +99,11 @@ Schema: [`apps/backend/prisma/schema.prisma`](../apps/backend/prisma/schema.pris
 - `daily_checkins` (PK `user_id, bkk_day`): ประวัติเช็กอิน append-only (trigger ห้าม UPDATE) กันรับซ้ำชั้นที่สอง
 - `mission_progress` (PK `user_id, period_key, mission_id`): ความคืบหน้าภารกิจ `period_key` = `D<วัน>` หรือ `W<วันจันทร์>` แถวเกิดครั้งแรกที่ผู้เล่นทำสิ่งที่ภารกิจนับ CHECK: `progress` อยู่ระหว่าง 0 ถึง `target`, ที่รับแล้วต้องครบเป้า
 - นิยามภารกิจไม่ได้อยู่ในฐานข้อมูล อยู่ใน `shared-contracts/src/daily.ts` (เปลี่ยนรางวัลได้โดยไม่ต้อง migrate)
+
+## Migration ของ Phase 12 (`*_phase12_jobs`)
+
+- enum `WalletTransactionType` และ `InventoryTransactionType` เพิ่ม `JOB_WAGE` (ค่าแรงเป็น Gold, ผลผลิตจากสวนเป็นไอเทม ผ่าน ledger เดิม), `QuestObjectiveType` เพิ่ม `JOB_SHIFT_COMPLETE`
+- `job_shifts`: หนึ่งแถวต่อกะ `job` (CHECK 3 ค่า), `seed`, `bkk_day` (วันไทยที่เริ่มกะ ใช้นับโควตาวันละ 8 กะ), `worker_level` ตอนเริ่ม, `status` ACTIVE/DONE/EXPIRED, `paid`, `correct`, `wage_gold`, `worker_xp`, `result` (JSON เฉลยและสลิป เก็บไว้ให้ส่งซ้ำได้ผลเดิม)
+- partial unique index `job_shifts_one_active_per_user` (กะเปิดได้ทีละกะ), CHECK: กะที่จบแล้วต้องมี `finished_at`, กะฝึกฝน (`paid = false`) ต้องมี `wage_gold = 0`
+- `player_skills_skill_check` เพิ่ม `WORKER` (ไม่มีตารางทักษะใหม่ ใช้ `player_skills` เดิม)
+- ไม่มีตาราง `jobs`: นิยามงานอยู่ใน `shared-contracts/src/jobs.ts` เหมือนสูตรคราฟต์ (ย้ายลง DB ได้เมื่อมีหน้าแอดมิน)

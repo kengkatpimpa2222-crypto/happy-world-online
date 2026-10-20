@@ -246,3 +246,27 @@ curl -s $API/city/growth -H "authorization: Bearer $TOKEN"
 **กันรับซ้ำ**: เช็กอินเป็น upsert แบบมีเงื่อนไข `last_day < today` แถวเดียว (กด 10 ครั้งพร้อมกันผ่านครั้งเดียว), ตาราง `daily_checkins` (PK ผู้เล่น+วัน) และ idempotency key ของ ledger (`checkin:<day>:GOLD`, `mission:<periodKey>:<id>:GOLD`) เป็นด่านที่ 2 และ 3 การรับภารกิจเปลี่ยน `COMPLETED → CLAIMED` แบบมีเงื่อนไข Gold ผ่าน `WalletService` (`DAILY_CHECKIN`, `MISSION_REWARD`) ไอเทมผ่าน `InventoryService` (ledger `inventory_transactions` ชนิดเดียวกัน) audit log `daily.checkin`, `mission.claimed`
 
 Dev/QA: `DAILY_CLOCK_OFFSET_HOURS` เลื่อนนาฬิการางวัลรายวัน (เช่น 24 = ลองเช็กอินพรุ่งนี้) ห้ามใช้ใน production (server ไม่ยอมเริ่ม)
+
+## งานพาร์ตไทม์ (Phase 12)
+
+นิยามงานอยู่ใน `packages/shared-contracts/src/jobs.ts` (เหมือนสูตรคราฟต์ ไม่อยู่ใน DB) หนึ่งกะ = 5 งานสั้น ๆ ที่ server สร้างจาก seed ที่เก็บไว้ (seed ไม่ถูกส่งออกไป) server ตรวจทุกคำตอบ ตัดสินค่าแรง และส่งเฉลยกลับมาทุกข้อ ตอบผิดไม่เสียอะไร
+
+- **CASHIER** (มินิมาร์ทใน PLAZA, Worker Lv 1): ลูกค้าซื้อของ 1-3 ชิ้น จ่ายแบงก์ ผู้เล่นทอนเงิน คำตอบ = จำนวนเหรียญ/แบงก์แต่ละชนิด `[100, 50, 20, 10, 5, 2, 1]` ถูก = ผลรวมเท่าเงินทอน, ทิป = ใช้จำนวนชิ้นน้อยที่สุด
+- **FARMHAND** (สวนใน COUNTRYSIDE, Worker Lv 1): ผลผลิตกี่กิโลต่อแถว ลังละกี่กิโล คำตอบ = `[จำนวนลัง]` (ปัดขึ้น) ถูกอย่างน้อย 3 ข้อได้ผลผลิต 2 ชิ้น (มะม่วง/มะพร้าว/ข้าวเหนียว) เข้า ledger ไอเทม
+- **PACKER** (โรงงานใน INDUSTRIAL, Worker Lv 2): ออร์เดอร์ N ชิ้น กล่องหลายขนาด คำตอบ = จำนวนกล่องแต่ละขนาด ถูก = ใส่พอดี, โบนัส = กล่องน้อยที่สุด (แบบหยิบกล่องใหญ่ก่อนไม่ได้ดีที่สุดเสมอ)
+- ค่าแรง = ข้อที่ถูก × ค่าแรงต่องาน + ทิปข้อที่ดีที่สุด + โบนัสถูกครบกะ แล้วบวก 5% ต่อ Worker level ที่เกิน 1 (คิดจากเลเวลตอนเริ่มกะ)
+- **วันละ 8 กะที่ได้ค่าแรง** (นับรวมทุกงาน ตามวันไทยที่เริ่มกะ) กะต่อจากนั้นเป็นกะฝึกฝน ตรวจและเฉลยเหมือนเดิมแต่ไม่ได้ทอง ไม่ได้ XP ไม่นับภารกิจ ข้ามวันไม่เสียอะไร
+
+| Method | Path | หมายเหตุ |
+|---|---|---|
+| GET | `/jobs` | `{jobs[{job, zone, x, y, nameTh, placeTh, skillTh, workerLevel, unlocked, tasksPerShift, wagePerTask, perfectBonus, shiftBonus, produce}], paidShiftsPerDay, paidShiftsLeft, resetsAt, worker, active, recent[5], totals {paidShifts, goldEarned}}` |
+| POST | `/jobs/start` | `{job}` คืนกะ `{id, job, status, workerLevel, startedAt, minSeconds, expiresAt, tasks[], result: null, resumed, paidShiftsLeft}` ถ้ามีกะงานเดียวกันค้างอยู่ คืนกะเดิม (`resumed: true`) |
+| POST | `/jobs/shifts/:id/finish` | `{answers: number[][]}` หนึ่งคำตอบต่อหนึ่งงาน คืนกะพร้อม `result {checks[{correct, perfect, expected, answer}], pay {base, perfectBonus, shiftBonus, skillBonus, total}, wageGold, produce, workerXp, playerXp, paid, playerLevel, workerLevelAfter, workerLeveledUp}` + `replayed, paidShiftsLeft, worker, gold` ส่งซ้ำได้ผลเดิม |
+
+รูปแบบงานใน `tasks[]`: `{kind: "CASHIER", items[{nameTh, price}], total, paid, denominations}` · `{kind: "FARMHAND", rowsKg[], crateKg}` · `{kind: "PACKER", quantity, boxSizes[]}`
+
+**ข้อผิดพลาด**: `JOB_LOCKED` 409 `{workerLevel}`, `JOB_SHIFT_IN_PROGRESS` 409 `{shiftId, job}` (มีกะงานอื่นค้าง), `JOB_SHIFT_TOO_EARLY` 409 `{secondsLeft}` (เร็วกว่า 2 วินาทีต่องาน), `JOB_SHIFT_EXPIRED` 409 (เปิดค้างเกิน 15 นาที กะใหม่เริ่มได้ทันที), `JOB_ANSWER_INVALID` 400 `{lengths}` (จำนวนคำตอบหรือขนาดไม่ตรงกับงาน), 404 (กะของคนอื่น)
+
+**กันจ่ายซ้ำ**: ล็อกแถว `player_profiles` + แถวกะ (`FOR UPDATE`), สถานะ `ACTIVE → DONE` ครั้งเดียว, partial unique index กะเปิดได้ทีละกะ, ledger key `job:<shiftId>:GOLD` และ `job:<shiftId>:<MATERIAL>` (ชนิด `JOB_WAGE` ทั้ง wallet และ item ledger) กะที่ส่งแล้วนับภารกิจ `JOB_SHIFT_COMPLETE` (ภารกิจรายวันใหม่ `d_job_1`)
+
+**เขตใหม่**: `COUNTRYSIDE` (60×50) และ `INDUSTRIAL` (50×40) ใน `CITY_ZONES` ประตูอยู่มุมล่างซ้าย/ขวาของ PLAZA ใช้ระบบห้องและ shard เดิมทั้งหมด

@@ -13,7 +13,8 @@
 import type { BusinessProductCode } from './game-config';
 
 // ---- Life skills ----
-export const SKILL_CODES = ['EXPLORER', 'CRAFTER'] as const;
+/** WORKER (Phase 12) grows from part-time shifts, see jobs.ts. */
+export const SKILL_CODES = ['EXPLORER', 'CRAFTER', 'WORKER'] as const;
 export type SkillCode = (typeof SKILL_CODES)[number];
 export const SKILL_MAX_LEVEL = 10;
 
