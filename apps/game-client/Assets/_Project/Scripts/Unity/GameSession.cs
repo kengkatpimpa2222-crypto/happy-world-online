@@ -86,6 +86,10 @@ namespace HappyWorld.Unity
         private DistrictPlot _doorPlot;
         private Vector3 _cityCamOffset;
         private const float DistrictResyncSeconds = 45f;
+        // Phase 12: part-time jobs (the workplaces come from GET /jobs)
+        public JobsOverview Jobs { get; private set; }
+        private bool _jobsLoading;
+        private JobBoardView _jobBoards;
         // Phase 9.1: the current expedition's countdown; the server decides when it is back
         public readonly ExpeditionTracker Trips = new ExpeditionTracker();
         private bool _tripCheckRunning;
@@ -290,6 +294,9 @@ namespace HappyWorld.Unity
         {
             _ui.ShowLoading(Texts.T("ui.loading"));
             Layout = await Api.GetCityAsync();
+            // Phase 12: workplaces before the first zone is built, so random trees keep clear of them
+            try { Jobs = await Api.GetJobsAsync(); }
+            catch (ApiException e) { Debug.LogWarning("jobs " + e.Status + " " + e.Code); }
             if (_local == null) SpawnLocalPlayer();
             _ui.ShowHud();
             await ConnectRealtimeAsync();
@@ -297,6 +304,7 @@ namespace HappyWorld.Unity
             RefreshCityNow();
             RefreshGrowth();
             RefreshDaily();
+            if (Jobs == null) RefreshJobs();
             Run(ShowWelcomeBackReportAsync);
             Trips.Resync(Clock); // reopened the app: load the trip that kept going while it was closed
         }
@@ -491,7 +499,8 @@ namespace HappyWorld.Unity
             CurrentZone = Layout.zones.FirstOrDefault(z => z.id == s.zone);
             if (CurrentZone == null) return;
             LeaveHomeView();
-            _portals = CityBuilder.Build(CurrentZone, _zoneRoot); // also removes the previous zone's market view
+            _portals = CityBuilder.Build(CurrentZone, _zoneRoot, WorkSpots(CurrentZone.id)); // also removes the previous zone's market view
+            _jobBoards = JobBoardView.Create(_zoneRoot, CurrentZone, Jobs != null ? Jobs.jobs : null);
             _market = null;
             _district = null;
             if (CurrentZone.id == "HOMES")
@@ -847,7 +856,7 @@ namespace HappyWorld.Unity
             if (plot == null || text == null)
             {
                 _doorPlot = null;
-                _ui.SetPrompt(null, null);
+                UpdateWorkPrompt(pos);
                 return;
             }
             if (_doorPlot != plot)
@@ -858,6 +867,72 @@ namespace HappyWorld.Unity
                 _ui.SetPrompt(text, can ? () => Run(() => EnterHomeAsync(owner)) : (Action)null);
             }
             if (Input.GetKeyDown(KeyCode.E) && (plot.isMine || plot.canVisit)) Run(() => EnterHomeAsync(plot.isMine ? Profile.userId : plot.owner.userId));
+        }
+
+        // ---------- part-time jobs (Phase 12) ----------
+
+        /// <summary>At a job board: "ทำงาน: พนักงานแคชเชียร์" opens the board (E on PC). In the Countryside, the gate out to explore.</summary>
+        private void UpdateWorkPrompt(Vector2 pos)
+        {
+            var job = JobBoardHere();
+            if (job != null)
+            {
+                var info = Jobs.jobs.First(j => j.job == job);
+                _ui.SetPrompt(JobPresenter.BoardPrompt(info), () => _ui.ShowJobs(job));
+                if (Input.GetKeyDown(KeyCode.E)) _ui.ShowJobs(job);
+                return;
+            }
+            if (CurrentZone != null && CurrentHome == null && JobPresenter.AtExploreGate(CurrentZone.id, pos.x, pos.y))
+            {
+                _ui.SetPrompt("ออกสำรวจจากที่นี่", _ui.ShowExplore);
+                if (Input.GetKeyDown(KeyCode.E)) _ui.ShowExplore();
+                return;
+            }
+            _ui.SetPrompt(null, null);
+        }
+
+        /// <summary>The job (code) whose board the player stands at, or null.</summary>
+        public string JobBoardHere()
+        {
+            if (Jobs == null || _local == null || CurrentZone == null || CurrentHome != null) return null;
+            var pos = _local.ServerPos;
+            var j = JobPresenter.BoardNear(Jobs.jobs, CurrentZone.id, pos.x, pos.y);
+            return j != null ? j.job : null;
+        }
+
+        public void RefreshJobs()
+        {
+            if (_jobsLoading || Api == null) return;
+            _jobsLoading = true;
+            Run(async () =>
+            {
+                try
+                {
+                    OnJobs(await Api.GetJobsAsync());
+                }
+                finally
+                {
+                    _jobsLoading = false;
+                }
+            });
+        }
+
+        /// <summary>New job data: rebuild the boards of the zone I'm in (they show locked/unlocked).</summary>
+        public void OnJobs(JobsOverview o)
+        {
+            if (o == null) return;
+            Jobs = o;
+            if (CurrentZone == null || CurrentHome != null) return;
+            if (_jobBoards != null) Destroy(_jobBoards.gameObject);
+            _jobBoards = JobBoardView.Create(_zoneRoot, CurrentZone, o.jobs);
+        }
+
+        private List<Vector3> WorkSpots(string zone)
+        {
+            var spots = new List<Vector3>();
+            if (Jobs != null) foreach (var j in Jobs.jobs) if (j.zone == zone) spots.Add(new Vector3(j.x, 0, j.y));
+            if (zone == JobPresenter.ExploreGateZone) spots.Add(new Vector3(JobPresenter.ExploreGateX, 0, JobPresenter.ExploreGateY));
+            return spots;
         }
 
         /// <summary>Re-reads GET /market when standing in the market (after my shop changed, or a stall-changed event).</summary>
@@ -1036,6 +1111,8 @@ namespace HappyWorld.Unity
             Festival = null;
             _festivalRefreshAt = -1f;
             Daily.Clear();
+            Jobs = null;
+            _jobBoards = null;
             _decor = null;
             CityNow = null;
             Growth = null;

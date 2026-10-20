@@ -18,5 +18,6 @@ export const QUEST_OBJECTIVES = [
   'EXPEDITION_COMPLETE',
   'GATHER_MATERIAL',
   'CRAFT_ITEM',
+  'JOB_SHIFT_COMPLETE',
 ] as const;
 export type QuestObjective = (typeof QUEST_OBJECTIVES)[number];

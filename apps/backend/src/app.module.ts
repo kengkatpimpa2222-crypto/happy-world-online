@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
+import { JobsModule } from './jobs/jobs.module';
 import { AdventureModule } from './adventure/adventure.module';
 import { AuditModule } from './audit/audit.module';
 import { AuthModule } from './auth/auth.module';
@@ -52,6 +53,7 @@ import { WalletModule } from './wallet/wallet.module';
     PurchasesModule,
     BusinessModule,
     AdventureModule,
+    JobsModule,
     HomeModule,
     FestivalModule,
     CityLifeModule,

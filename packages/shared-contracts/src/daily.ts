@@ -139,6 +139,7 @@ export const DAILY_MISSION_POOL: readonly MissionDef[] = [
   daily('d_gather_8', 'GATHER_MATERIAL', 8, 30, 8, 'เก็บวัตถุดิบ 8 ชิ้น', 'Gather 8 materials'),
   daily('d_craft_1', 'CRAFT_ITEM', 1, 50, 12, 'แปรรูปสินค้า 1 ครั้ง', 'Craft once'),
   daily('d_decorate_1', 'PLACE_FURNITURE', 1, 30, 8, 'จัดเฟอร์นิเจอร์ในบ้าน 1 ชิ้น', 'Place 1 piece of furniture at home'),
+  daily('d_job_1', 'JOB_SHIFT_COMPLETE', 1, 30, 8, 'ทำงานพาร์ตไทม์ให้ครบ 1 กะ', 'Work 1 part-time shift'),
 ];
 
 export const DAILY_MISSIONS_PER_DAY = 3;

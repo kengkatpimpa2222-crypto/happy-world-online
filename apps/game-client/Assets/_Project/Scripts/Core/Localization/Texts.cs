@@ -216,6 +216,18 @@ namespace HappyWorld.Core.Localization
             ["zone.market"] = "ตลาด",
             ["zone.activity"] = "ลานกิจกรรม",
             ["zone.minigame_gate"] = "ประตูมินิเกม",
+            ["zone.countryside"] = "ชนบท",
+            ["zone.industrial"] = "เขตอุตสาหกรรม",
+
+            // part-time jobs (Phase 12)
+            ["ui.jobs"] = "งานพาร์ตไทม์",
+            ["ui.start_shift"] = "เริ่มกะ",
+            ["ui.hand_in"] = "ส่งงาน",
+            ["JOB_LOCKED"] = "งานนี้ต้องมีทักษะพนักงานสูงกว่านี้ ลองงานอื่นก่อนนะ",
+            ["JOB_SHIFT_IN_PROGRESS"] = "ยังมีกะงานอื่นค้างอยู่ ทำให้เสร็จก่อนนะ",
+            ["JOB_SHIFT_TOO_EARLY"] = "ใจเย็น ๆ ค่อย ๆ ตรวจอีกนิดแล้วค่อยส่ง",
+            ["JOB_SHIFT_EXPIRED"] = "กะนี้นานเกินไปแล้ว เริ่มกะใหม่ได้เลย",
+            ["JOB_ANSWER_INVALID"] = "คำตอบไม่ครบ ลองเปิดกะใหม่อีกครั้ง",
         };
 
         private static readonly Dictionary<string, string> En = new Dictionary<string, string>
@@ -230,6 +242,13 @@ namespace HappyWorld.Core.Localization
             ["CHECKIN_ALREADY_CLAIMED"] = "Already checked in today. See you tomorrow!",
             ["MISSION_EXPIRED"] = "This mission has ended",
             ["furn_nang_kwak"] = "Nang Kwak figure",
+            ["zone.countryside"] = "Countryside",
+            ["zone.industrial"] = "Industrial zone",
+            ["ui.jobs"] = "Part-time jobs",
+            ["ui.start_shift"] = "Start shift",
+            ["ui.hand_in"] = "Hand in",
+            ["JOB_LOCKED"] = "This job needs a higher Worker level",
+            ["JOB_SHIFT_TOO_EARLY"] = "Take a moment to check, then hand in",
         };
 
         public static string T(string key)

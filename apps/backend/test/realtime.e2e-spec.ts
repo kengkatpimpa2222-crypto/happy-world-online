@@ -40,7 +40,7 @@ describe('Realtime city (WebSocket)', () => {
   it('exposes the city layout over REST', async () => {
     const p = await newGuest(app);
     const res = await http().get('/api/v1/city').set(p.auth).expect(200);
-    expect(res.body.zones.map((z: { id: string }) => z.id)).toEqual(['PLAZA', 'HOMES', 'MARKET', 'ACTIVITY', 'MINIGAME_GATE']);
+    expect(res.body.zones.map((z: { id: string }) => z.id)).toEqual(['PLAZA', 'HOMES', 'MARKET', 'ACTIVITY', 'MINIGAME_GATE', 'COUNTRYSIDE', 'INDUSTRIAL']);
     expect(res.body.realtime).toMatchObject({ namespace: '/realtime', path: '/ws' });
     expect(res.body.presetMessages.length).toBeGreaterThan(5);
   });

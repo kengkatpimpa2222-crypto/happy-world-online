@@ -48,6 +48,8 @@ enum WalletTransactionType {
   DAILY_CHECKIN
   /// Phase 11: a daily or weekly mission reward
   MISSION_REWARD
+  /// Phase 12: pay for a part-time shift
+  JOB_WAGE
 }
 
 enum ItemCategory {
@@ -87,6 +89,8 @@ enum QuestObjectiveType {
   EXPEDITION_COMPLETE
   GATHER_MATERIAL
   CRAFT_ITEM
+  /// Phase 12: a paid part-time shift handed in
+  JOB_SHIFT_COMPLETE
 }
 
 /// สถานะแผงร้านในตลาด (Phase 5)
@@ -189,6 +193,7 @@ model User {
   festivalClaims        FestivalRewardClaim[]
   minigameSessions      MinigameSession[]
   expeditions           Expedition[]
+  jobShifts             JobShift[]
   skills                PlayerSkill[]
   inventoryTransactions InventoryTransaction[]
 
@@ -841,6 +846,8 @@ enum InventoryTransactionType {
   DAILY_CHECKIN
   /// Phase 11: item from a daily or weekly mission
   MISSION_REWARD
+  /// Phase 12: farm produce paid for a shift
+  JOB_WAGE
 }
 
 /// Append-only ledger of item quantity changes (a DB trigger forbids UPDATE/DELETE), the item twin of
@@ -864,10 +871,10 @@ model InventoryTransaction {
   @@map("inventory_transactions")
 }
 
-/// Life skills (EXPLORER, CRAFTER); the level is derived from xp (skillLevelForXp in shared-contracts).
+/// Life skills (EXPLORER, CRAFTER, WORKER); the level is derived from xp (skillLevelForXp in shared-contracts).
 model PlayerSkill {
   userId    String   @map("user_id") @db.Uuid
-  /// EXPLORER | CRAFTER
+  /// EXPLORER | CRAFTER | WORKER (Phase 12)
   skill     String   @db.VarChar(16)
   xp        Int      @default(0)
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -900,4 +907,36 @@ model Expedition {
 
   @@index([userId, startedAt])
   @@map("expeditions")
+}
+
+// ---- Phase 12: part-time jobs ----
+
+/// One part-time shift (job definitions live in shared-contracts/jobs.ts, like recipes). At most one ACTIVE
+/// shift per player (partial unique index in the migration SQL). Tasks are rebuilt from the seed; the result
+/// (checks, payslip, produce) is stored when handed in, so a repeated finish returns the same payslip.
+model JobShift {
+  id          String    @id @default(uuid()) @db.Uuid
+  userId      String    @map("user_id") @db.Uuid
+  /// CASHIER | FARMHAND | PACKER
+  job         String    @db.VarChar(16)
+  seed        Int
+  /// Bangkok day the shift started (the daily paid-shift limit counts by it)
+  bkkDay      String    @map("bkk_day") @db.VarChar(10)
+  /// Worker level when the shift started (the pay depends on it, not on a level-up during the shift)
+  workerLevel Int       @map("worker_level")
+  /// ACTIVE | DONE | EXPIRED
+  status      String    @default("ACTIVE") @db.VarChar(10)
+  startedAt   DateTime  @default(now()) @map("started_at")
+  finishedAt  DateTime? @map("finished_at")
+  /// false = practice shift (over the daily limit): checked and explained, no pay
+  paid        Boolean   @default(false)
+  correct     Int       @default(0)
+  wageGold    Int       @default(0) @map("wage_gold")
+  workerXp    Int       @default(0) @map("worker_xp")
+  result      Json?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, bkkDay])
+  @@map("job_shifts")
 }

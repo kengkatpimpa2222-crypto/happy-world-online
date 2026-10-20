@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { BUSINESS_PRODUCT_CODES } from './game-config';
 import { CRAFT_MAX_TIMES, EXPEDITION_PLAN_CODES, EXPEDITION_SITE_CODES, RECIPE_CODES } from './adventure';
+import { CHANGE_DENOMINATIONS, JOB_CODES, JOB_MAX_PIECES } from './jobs';
 
 /** Header name the client must send on money-moving POSTs. */
 export const IDEMPOTENCY_HEADER = 'idempotency-key';
@@ -175,6 +176,18 @@ export const craftSchema = z
   .object({ recipe: z.enum(RECIPE_CODES), businessId: z.uuid(), times: z.number().int().min(1).max(CRAFT_MAX_TIMES) })
   .strict();
 export type CraftRequest = z.infer<typeof craftSchema>;
+
+// ---- Part-time jobs (Phase 12) ----
+export const startJobSchema = z.object({ job: z.enum(JOB_CODES) }).strict();
+export type StartJobRequest = z.infer<typeof startJobSchema>;
+
+/** One answer per task: counts per coin/box size, or a single number (crates). The server checks the shape against the tasks. */
+export const finishJobShiftSchema = z
+  .object({
+    answers: z.array(z.array(z.number().int().min(0).max(JOB_MAX_PIECES)).min(1).max(CHANGE_DENOMINATIONS.length)).min(1).max(10),
+  })
+  .strict();
+export type FinishJobShiftRequest = z.infer<typeof finishJobShiftSchema>;
 
 export const uuidParamSchema = z.uuid();
 export const questIdParamSchema = z.string().regex(/^[a-z0-9_]{2,64}$/);

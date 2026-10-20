@@ -1033,4 +1033,124 @@ namespace HappyWorld.Core.Api
         public int? myPlot;
         public List<DistrictPlot> plots = new List<DistrictPlot>();
     }
+    // ---------- Phase 12: part-time jobs ----------
+
+    /// <summary>A workplace from GET /jobs (CASHIER, FARMHAND, PACKER) and where its job board stands.</summary>
+    public sealed class JobInfo
+    {
+        public string job;
+        public string zone;
+        public float x;
+        public float y;
+        public string nameTh;
+        public string placeTh;
+        public string skillTh;
+        public int workerLevel;
+        public bool unlocked;
+        public int tasksPerShift;
+        public int wagePerTask;
+        public int perfectBonus;
+        public int shiftBonus;
+        public List<string> produce = new List<string>();
+    }
+
+    public sealed class JobShopItem
+    {
+        public string nameTh;
+        public int price;
+    }
+
+    /// <summary>One task of a shift; which fields are set depends on kind (CASHIER, FARMHAND, PACKER).</summary>
+    public sealed class JobTask
+    {
+        public string kind;
+        // CASHIER: the bill and the note the customer pays with; the answer is a count per denomination
+        public List<JobShopItem> items = new List<JobShopItem>();
+        public int total;
+        public int paid;
+        public List<int> denominations = new List<int>();
+        // FARMHAND: kilos per row and how much a crate holds; the answer is one number (crates)
+        public List<int> rowsKg = new List<int>();
+        public int crateKg;
+        // PACKER: the order and the box sizes on the line; the answer is a count per box size
+        public int quantity;
+        public List<int> boxSizes = new List<int>();
+    }
+
+    public sealed class JobTaskCheck
+    {
+        public bool correct;
+        public bool perfect;
+        /// <summary>the best answer (the lesson shown after the shift)</summary>
+        public List<int> expected = new List<int>();
+        public List<int> answer = new List<int>();
+    }
+
+    public sealed class ShiftPay
+    {
+        public int @base;
+        public int perfectBonus;
+        public int shiftBonus;
+        public int skillBonus;
+        public int total;
+    }
+
+    public sealed class JobShiftResult
+    {
+        public List<JobTaskCheck> checks = new List<JobTaskCheck>();
+        /// <summary>the payslip as earned; wageGold is what was paid (0 on a practice shift)</summary>
+        public ShiftPay pay = new ShiftPay();
+        public int wageGold;
+        public Dictionary<string, int> produce = new Dictionary<string, int>();
+        public int workerXp;
+        public int playerXp;
+        public bool paid;
+        public int? playerLevel;
+        public int workerLevelAfter;
+        public bool workerLeveledUp;
+    }
+
+    /// <summary>A shift (POST /jobs/start, GET /jobs active/recent, and the base of the finish answer).</summary>
+    public class JobShift
+    {
+        public string id;
+        public string job;
+        /// <summary>ACTIVE | DONE | EXPIRED</summary>
+        public string status;
+        public int workerLevel;
+        public DateTime startedAt;
+        public int minSeconds;
+        public DateTime expiresAt;
+        public List<JobTask> tasks = new List<JobTask>();
+        public JobShiftResult result;
+        /// <summary>start only: true when this is my open shift handed back</summary>
+        public bool resumed;
+        public int paidShiftsLeft;
+    }
+
+    public sealed class JobFinishResult : JobShift
+    {
+        public bool replayed;
+        public SkillView worker = new SkillView();
+        public int gold;
+    }
+
+    public sealed class JobTotals
+    {
+        public int paidShifts;
+        public int goldEarned;
+    }
+
+    /// <summary>GET /jobs</summary>
+    public sealed class JobsOverview
+    {
+        public List<JobInfo> jobs = new List<JobInfo>();
+        public int paidShiftsPerDay;
+        public int paidShiftsLeft;
+        public DateTime resetsAt;
+        public SkillView worker = new SkillView();
+        public JobShift active;
+        public List<JobShift> recent = new List<JobShift>();
+        public JobTotals totals = new JobTotals();
+    }
 }
