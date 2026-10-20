@@ -5,6 +5,7 @@ import { AppException } from '../common/app-exception';
 import { AuditService } from '../audit/audit.service';
 import { PrismaService, Tx } from '../prisma/prisma.service';
 import { WalletService } from '../wallet/wallet.service';
+import { DailyRewardsService } from './daily-rewards.service';
 
 @Injectable()
 export class QuestsService {
@@ -12,6 +13,7 @@ export class QuestsService {
     private readonly prisma: PrismaService,
     private readonly wallet: WalletService,
     private readonly audit: AuditService,
+    private readonly daily: DailyRewardsService,
   ) {}
 
   async list(userId: string) {
@@ -112,11 +114,13 @@ export class QuestsService {
   }
 
   /**
-   * Advances every IN_PROGRESS quest of this objective type, server-side only.
+   * Advances every IN_PROGRESS quest of this objective type, server-side only, and the player's
+   * daily/weekly missions that count the same thing (Phase 11).
    * Called from inside the transaction of the action that earned the progress.
    */
   async recordEvent(tx: Tx, userId: string, type: QuestObjectiveType, amount = 1): Promise<void> {
     if (amount <= 0) return;
+    await this.daily.record(tx, userId, type, amount);
     await tx.$executeRaw`
       UPDATE "quest_progress" qp
          SET "progress" = LEAST(q."objective_target", qp."progress" + ${amount}),

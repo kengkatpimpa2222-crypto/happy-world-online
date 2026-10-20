@@ -198,6 +198,15 @@ namespace HappyWorld.Core.Localization
             ["HOME_PLACEMENT_INVALID"] = "วางตรงนี้ไม่ได้ (ชนของชิ้นอื่นหรือล้นห้อง)",
             ["HOME_VISIT_NOT_ALLOWED"] = "เจ้าของบ้านยังไม่เปิดให้เข้าเยี่ยม",
             ["HOME_FULL"] = "ในบ้านคนเยอะแล้ว รอสักครู่นะ",
+            // daily rewards & missions (Phase 11)
+            ["CHECKIN_ALREADY_CLAIMED"] = "วันนี้เช็กอินไปแล้ว พรุ่งนี้มาใหม่นะ",
+            ["MISSION_NOT_FOUND"] = "ไม่พบภารกิจนี้ ลองเปิดหน้ารางวัลใหม่",
+            ["MISSION_EXPIRED"] = "ภารกิจนี้หมดเวลาแล้ว",
+            ["MISSION_NOT_COMPLETED"] = "ภารกิจยังไม่สำเร็จ",
+            ["MISSION_ALREADY_CLAIMED"] = "รับรางวัลภารกิจนี้ไปแล้ว",
+            ["ui.daily"] = "รางวัลวันนี้",
+            ["ui.checkin"] = "เช็กอิน",
+            ["furn_nang_kwak"] = "ตุ๊กตานางกวัก",
             ["IDEMPOTENCY_KEY_REUSED"] = "รายการนี้ถูกส่งไปแล้ว ลองใหม่อีกครั้ง",
             ["home_first_furniture"] = "วางเฟอร์นิเจอร์ชิ้นแรก",
 
@@ -216,6 +225,11 @@ namespace HappyWorld.Core.Localization
             ["error.generic"] = "Something went wrong. Try again.",
             ["ui.play"] = "Play",
             ["ui.loading"] = "Loading...",
+            ["ui.daily"] = "Daily rewards",
+            ["ui.checkin"] = "Check in",
+            ["CHECKIN_ALREADY_CLAIMED"] = "Already checked in today. See you tomorrow!",
+            ["MISSION_EXPIRED"] = "This mission has ended",
+            ["furn_nang_kwak"] = "Nang Kwak figure",
         };
 
         public static string T(string key)

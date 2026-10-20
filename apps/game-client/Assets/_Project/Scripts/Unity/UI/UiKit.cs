@@ -226,6 +226,9 @@ namespace HappyWorld.Unity.UI
 
         public static void Clear(Transform t)
         {
+            // A modal can be replaced (and its list destroyed) while an await is still running; Unity's == null
+            // is true for destroyed objects. Tapping Check-in fast threw NullReferenceException here (Phase 11 QA).
+            if (t == null) return;
             for (int i = t.childCount - 1; i >= 0; i--) UnityEngine.Object.Destroy(t.GetChild(i).gameObject);
         }
     }

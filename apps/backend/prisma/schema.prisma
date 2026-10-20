@@ -44,6 +44,10 @@ enum WalletTransactionType {
   IAP_GRANT
   IAP_REFUND
   ADMIN_ADJUSTMENT
+  /// Phase 11: the gift of a daily check-in step
+  DAILY_CHECKIN
+  /// Phase 11: a daily or weekly mission reward
+  MISSION_REWARD
 }
 
 enum ItemCategory {
@@ -166,6 +170,9 @@ model User {
   home                  PlayerHome?
   businesses            Business[]
   questProgress         QuestProgress[]
+  checkin               PlayerCheckin?
+  checkinHistory        DailyCheckin[]
+  missionProgress       MissionProgress[]
   sessions              GameSession[]
   purchases             Purchase[]
   subscriptions         Subscription[]
@@ -542,6 +549,62 @@ model QuestProgress {
   @@map("quest_progress")
 }
 
+// ---------- Daily rewards & missions (Phase 11) ----------
+
+/// One row per player: where they are on the 7-day check-in track. A check-in is a single conditional
+/// upsert (`last_day < today`), so two parallel check-ins on one day cannot both pass.
+model PlayerCheckin {
+  userId    String   @id @map("user_id") @db.Uuid
+  /// step claimed last (1..7); the next check-in lands on step % 7 + 1. A missed day does not reset it.
+  step      Int
+  /// Bangkok day "YYYY-MM-DD" of the last check-in
+  lastDay   String   @map("last_day") @db.VarChar(10)
+  totalDays Int      @map("total_days")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("player_checkins")
+}
+
+/// Append-only history of check-ins; the primary key (player, day) is a second guard against a double claim.
+model DailyCheckin {
+  userId       String   @map("user_id") @db.Uuid
+  bkkDay       String   @map("bkk_day") @db.VarChar(10)
+  step         Int
+  rewardGold   Int      @map("reward_gold")
+  rewardItemId String?  @map("reward_item_id") @db.VarChar(64)
+  rewardQty    Int      @default(0) @map("reward_qty")
+  claimedAt    DateTime @default(now()) @map("claimed_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, bkkDay])
+  @@map("daily_checkins")
+}
+
+/// Progress of one daily or weekly mission. Mission definitions live in shared-contracts (daily.ts);
+/// a row appears the first time the player does something the mission counts.
+model MissionProgress {
+  userId      String      @map("user_id") @db.Uuid
+  /// "D2026-10-15" (Bangkok day) or "W2026-10-12" (week starting that Monday, Bangkok)
+  periodKey   String      @map("period_key") @db.VarChar(16)
+  missionId   String      @map("mission_id") @db.VarChar(48)
+  objective   String      @db.VarChar(40)
+  target      Int
+  progress    Int         @default(0)
+  status      QuestStatus @default(IN_PROGRESS)
+  completedAt DateTime?   @map("completed_at")
+  claimedAt   DateTime?   @map("claimed_at")
+  createdAt   DateTime    @default(now()) @map("created_at")
+  updatedAt   DateTime    @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, periodKey, missionId])
+  @@map("mission_progress")
+}
+
 // ---------- Social & safety ----------
 
 /// เก็บ 2 แถวต่อความเป็นเพื่อน 1 คู่ (A->B และ B->A) เพื่อ query ง่าย
@@ -774,6 +837,10 @@ enum InventoryTransactionType {
   HOME_REMOVE
   /// Phase 10: furniture gifted once with the starter home
   HOME_STARTER_GIFT
+  /// Phase 11: item from a daily check-in step
+  DAILY_CHECKIN
+  /// Phase 11: item from a daily or weekly mission
+  MISSION_REWARD
 }
 
 /// Append-only ledger of item quantity changes (a DB trigger forbids UPDATE/DELETE), the item twin of
