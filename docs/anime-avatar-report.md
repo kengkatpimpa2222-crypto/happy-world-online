@@ -56,3 +56,23 @@ Branch `claude/project-thread-jmoj6q` ต่อจาก PR #6 (`claude/phase-11
 cd apps/backend && npm test && npm run test:e2e   # backend
 ```
 Unity: เปิด `apps/game-client` ใน Unity 6 → Play → สร้างตัวละคร เลือก หญิง/ชาย และชุด → เดิน/วิ่งด้วย joystick แล้วดูผมและกระโปรง จากนั้น build APK ตาม `docs/android-build.md`
+
+## Unity 6 + Android Emulator QA (เครื่องผู้ใช้, 20 ต.ค. 2026)
+
+Unity 6000.0.84f1 batch build + `BuildAndroidDev` · Android 14 emulator (SwiftShader OpenGL ES 3.0) · backend จริง
+
+| รายการ | ผล |
+|---|---|
+| backend lint / typecheck / unit / e2e | ผ่าน · 92/92 · 179/179 |
+| Unity compile รอบแรก | ❌ `CS1069 UnityEngine.Avatar` เพราะยังไม่ได้เปิด built-in package Animation → เพิ่ม `com.unity.modules.animation` ใน `Packages/manifest.json` (commit 25319b3) แล้ว build ผ่าน 0 error |
+| shader `HappyWorld/AnimeToon` | compile ผ่าน แสดงผลบน GLES3 |
+| ตัวละครอนิเมะในเมือง (ผู้เล่นเก่าและใหม่) | ✅ ไม่ตกไปใช้ตัวละครเดิม |
+| หน้าสร้างตัวละคร: หญิง/ชาย, สีผิว 8 สี | ✅ เปลี่ยนรูปร่างและสีผิวทันทีหลังบันทึก |
+| ซื้อชุดนักเรียน ผมยาวสีดำ หมวกฟาง แล้วใส่ | ✅ ทั้งหญิงและชาย, `avatar` ใน DB มี `bodyType` ถูกต้อง |
+| ท่าเดิน / วิ่งด้วย joystick | ✅ ขาก้าวตามความเร็ว แขนแกว่ง |
+| exception ใน logcat | 0 |
+
+ข้อสังเกต: ตัวละครเล็กบนจอมือถือ (สูงราว 1/10 ของจอ) รายละเอียดหน้า/ผมพลิ้วดูยาก ควรพิจารณาซูมกล้องเข้าใกล้ขึ้น · NPC ในตลาดยังเป็นแบบเดิม (ตามที่ระบุไว้)
+
+ยังไม่ได้ทดสอบ: มือถือจริง, ผู้เล่นคนอื่นเห็นรูปร่างเดียวกัน (sync), ประสิทธิภาพเมื่อมีผู้เล่นหลายคน, spring bone ดูด้วยตาไม่ชัดในระยะกล้องนี้
+
