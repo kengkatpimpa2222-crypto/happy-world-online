@@ -88,6 +88,10 @@ export const ErrorCode = {
   JOB_SHIFT_TOO_EARLY: 'JOB_SHIFT_TOO_EARLY',
   JOB_SHIFT_EXPIRED: 'JOB_SHIFT_EXPIRED',
   JOB_ANSWER_INVALID: 'JOB_ANSWER_INVALID',
+  // Phase 13: Splash Arena
+  ARENA_IN_MATCH: 'ARENA_IN_MATCH',
+  ARENA_NOT_IN_MATCH: 'ARENA_NOT_IN_MATCH',
+  ARENA_THROW_REFUSED: 'ARENA_THROW_REFUSED',
 } as const;
 export type ErrorCode = (typeof ErrorCode)[keyof typeof ErrorCode];
 

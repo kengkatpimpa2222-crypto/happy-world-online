@@ -50,6 +50,8 @@ enum WalletTransactionType {
   MISSION_REWARD
   /// Phase 12: pay for a part-time shift
   JOB_WAGE
+  /// Phase 13: Gold for taking part in a Splash Arena match
+  ARENA_REWARD
 }
 
 enum ItemCategory {
@@ -196,6 +198,8 @@ model User {
   jobShifts             JobShift[]
   skills                PlayerSkill[]
   inventoryTransactions InventoryTransaction[]
+  arenaRatings          ArenaRating[]
+  arenaMatches          ArenaMatchPlayer[]
 
   @@index([deviceIdHash])
   @@map("users")
@@ -939,4 +943,71 @@ model JobShift {
 
   @@index([userId, bkkDay])
   @@map("job_shifts")
+}
+
+// ---- Phase 13: Splash Arena (opt-in team mode) and ranks ----
+
+/// A player's arena rating for one season (Bangkok calendar month). Created on first look; a new season starts
+/// from the last season's rating softened towards the start (shared-contracts arenaCarryOver).
+model ArenaRating {
+  userId    String   @map("user_id") @db.Uuid
+  /// "YYYY-MM"
+  season    String   @db.VarChar(7)
+  /// leaderboards are per age band, like the rest of the social world
+  ageBand   AgeBand  @map("age_band")
+  rating    Int
+  peak      Int
+  wins      Int      @default(0)
+  losses    Int      @default(0)
+  draws     Int      @default(0)
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, season])
+  @@index([season, ageBand, rating(sort: Desc)])
+  @@map("arena_ratings")
+}
+
+/// One finished match (matches in play live in memory on the server that runs them).
+model ArenaMatch {
+  id        String   @id @db.Uuid
+  season    String   @db.VarChar(7)
+  ageBand   AgeBand  @map("age_band")
+  withBots  Boolean  @map("with_bots")
+  scoreRed  Int      @map("score_red")
+  scoreBlue Int      @map("score_blue")
+  /// RED | BLUE | DRAW
+  winner    String   @db.VarChar(4)
+  startedAt DateTime @map("started_at")
+  endedAt   DateTime @map("ended_at")
+
+  players ArenaMatchPlayer[]
+
+  @@map("arena_matches")
+}
+
+/// A real player's line on a match's result sheet (bots are not stored).
+model ArenaMatchPlayer {
+  matchId      String     @map("match_id") @db.Uuid
+  userId       String     @map("user_id") @db.Uuid
+  /// RED | BLUE
+  team         String     @db.VarChar(4)
+  /// WIN | DRAW | LOSS (leaving early is always a LOSS)
+  outcome      String     @db.VarChar(4)
+  leftEarly    Boolean    @map("left_early")
+  soaks        Int
+  soakedTimes  Int        @map("soaked_times")
+  ratingBefore Int        @map("rating_before")
+  ratingAfter  Int        @map("rating_after")
+  rewardGold   Int        @map("reward_gold")
+  /// Bangkok day of the match (daily reward limit counts by it)
+  bkkDay       String     @map("bkk_day") @db.VarChar(10)
+
+  match ArenaMatch @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  user  User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([matchId, userId])
+  @@index([userId, bkkDay])
+  @@map("arena_match_players")
 }

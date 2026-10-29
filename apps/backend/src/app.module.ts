@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
+import { ArenaModule } from './arena/arena.module';
 import { JobsModule } from './jobs/jobs.module';
 import { AdventureModule } from './adventure/adventure.module';
 import { AuditModule } from './audit/audit.module';
@@ -54,6 +55,7 @@ import { WalletModule } from './wallet/wallet.module';
     BusinessModule,
     AdventureModule,
     JobsModule,
+    ArenaModule,
     HomeModule,
     FestivalModule,
     CityLifeModule,
