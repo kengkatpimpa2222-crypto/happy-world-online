@@ -270,3 +270,19 @@ Dev/QA: `DAILY_CLOCK_OFFSET_HOURS` เลื่อนนาฬิการาง
 **กันจ่ายซ้ำ**: ล็อกแถว `player_profiles` + แถวกะ (`FOR UPDATE`), สถานะ `ACTIVE → DONE` ครั้งเดียว, partial unique index กะเปิดได้ทีละกะ, ledger key `job:<shiftId>:GOLD` และ `job:<shiftId>:<MATERIAL>` (ชนิด `JOB_WAGE` ทั้ง wallet และ item ledger) กะที่ส่งแล้วนับภารกิจ `JOB_SHIFT_COMPLETE` (ภารกิจรายวันใหม่ `d_job_1`)
 
 **เขตใหม่**: `COUNTRYSIDE` (60×50) และ `INDUSTRIAL` (50×40) ใน `CITY_ZONES` ประตูอยู่มุมล่างซ้าย/ขวาของ PLAZA ใช้ระบบห้องและ shard เดิมทั้งหมด
+
+## ศึกลูกโป่งน้ำและแรงค์ (Phase 13)
+
+โหมดทีมแบบสมัครใจ เข้าได้จากคิวเท่านั้น (realtime ดู `docs/realtime.md`) ในเมืองไม่มีใครโจมตีใครได้ กติกาและค่าทั้งหมดอยู่ใน `packages/shared-contracts/src/arena.ts`
+
+- แรงค์ = Elo แบบทีม (K 32, เทียบค่าเฉลี่ยของสองทีม) เริ่ม 1000 แต้ม ชนะได้อย่างน้อย +1 เสมอ แมตช์ที่มีบอทขยับครึ่งเดียว ออกกลางคันนับแพ้
+- ระดับ: BRONZE < 1100 ≤ SILVER < 1250 ≤ GOLD < 1400 ≤ PLATINUM < 1550 ≤ DIAMOND < 1700 ≤ STAR
+- ซีซั่น = เดือนตามเวลาไทย (`"2026-11"`) ซีซั่นใหม่เริ่มที่ `1000 + (แต้มเดิม − 1000) / 2`
+- เหรียญ: ชนะ 20 เสมอ 12 แพ้ 6 ทอง เฉพาะ 10 แมตช์แรกของวัน (เวลาไทย) คนออกกลางคันไม่ได้ ledger `ARENA_REWARD` key `arena:<matchId>`
+
+| Method | Path | หมายเหตุ |
+|---|---|---|
+| GET | `/arena/me` | `{season, seasonEndsAt, rating, peak, tier, tierNameTh, nextTierAt, wins, losses, draws, position, rewardedMatchesLeft, rewardsResetAt, rewardGold {WIN, DRAW, LOSS}, recent[5] {matchId, endedAt, team, outcome, leftEarly, score {RED, BLUE}, withBots, soaks, delta, rewardGold}}` |
+| GET | `/arena/leaderboard?limit=50` | `{season, entries[{position, userId, displayName, level, isMe, rating, peak, tier, tierNameTh, nextTierAt, wins, losses, draws}]}` เฉพาะช่วงอายุเดียวกับผู้ถาม |
+
+ตาราง: `arena_ratings` (ผู้เล่น × ซีซั่น), `arena_matches` และ `arena_match_players` (บันทึกเฉพาะแมตช์ที่จบแล้ว ไม่เก็บบอท) บันทึกผลทั้งแมตช์ใน transaction เดียว ล็อกแถวแรงค์ (`FOR UPDATE`) เรียงตาม userId กัน deadlock

@@ -43,6 +43,15 @@ namespace HappyWorld.Unity.UI
         private Image _tripButtonBg;
         private double _tripTickAt;
         private string _exploreLabel;
+        // Phase 13: Splash Arena (queue chip on the HUD, the in-match HUD and the city HUD parts it hides)
+        private Button _arenaQueueBtn;
+        private Text _arenaQueueText;
+        private RectTransform _arenaHud;
+        private Text _arenaScore, _arenaClock, _arenaHits;
+        private Text _arenaThrowText;
+        private Image _arenaThrowBg;
+        private readonly List<GameObject> _hiddenForArena = new List<GameObject>();
+        private float _arenaTickAt, _queueTickAt;
 
         public VirtualJoystick Joystick { get; private set; }
         public bool ModalOpen => _modalLayer.childCount > 0;
@@ -240,6 +249,15 @@ namespace HappyWorld.Unity.UI
             _dailyText = dailyBtn.GetComponentInChildren<Text>();
             _dailyText.color = UiKit.Ink;
 
+            // Phase 13: Splash Arena, the opt-in team mode (nobody in the city can be attacked)
+            var arenaBtn = UiKit.Button(_hud, Texts.T("ui.arena") + " · แรงค์", new Color(0.55f, 0.85f, 1f, 0.95f), ShowArena, 28);
+            arenaBtn.GetComponent<RectTransform>().Place(new Vector2(0, 1), new Vector2(0.36f, 1), new Vector2(16, -392), new Vector2(0, -308));
+            arenaBtn.GetComponentInChildren<Text>().color = UiKit.Ink;
+            _arenaQueueBtn = UiKit.Button(_hud, "", UiKit.Accent, () => _s.Run(_s.CancelArenaQueueAsync), 26);
+            _arenaQueueBtn.GetComponent<RectTransform>().Place(new Vector2(0, 1), new Vector2(0.36f, 1), new Vector2(16, -500), new Vector2(0, -404));
+            _arenaQueueText = _arenaQueueBtn.GetComponentInChildren<Text>();
+            _arenaQueueBtn.gameObject.SetActive(false);
+
             // Phase 6: this week's city festival (tap for goals and rewards)
             var fest = UiKit.Button(_hud, Texts.T("ui.festival"), new Color(1f, 0.84f, 0.31f, 0.92f), ShowFestival, 26);
             fest.GetComponent<RectTransform>().Place(new Vector2(0.36f, 0.82f), new Vector2(0.64f, 0.895f));
@@ -284,6 +302,151 @@ namespace HappyWorld.Unity.UI
             UiKit.Button(_homeBar, "ออกจากบ้าน", UiKit.Muted, () => _s.Run(_s.LeaveHomeAsync), 30).GetComponent<RectTransform>()
                 .Place(new Vector2(0.51f, 0), new Vector2(1, 1));
             _homeBar.gameObject.SetActive(false);
+        }
+
+        // ---------- Splash Arena (Phase 13) ----------
+
+        private void BuildArenaHud()
+        {
+            _arenaHud = UiKit.Rect("ArenaHud", _hud).Place(Vector2.zero, Vector2.one);
+            var top = UiKit.Box("ArenaTop", _arenaHud, new Color(1, 1, 1, 0.88f)).Round(true).rectTransform
+                .Place(new Vector2(0.32f, 1), new Vector2(0.68f, 1), new Vector2(0, -170), new Vector2(0, -16));
+            _arenaScore = UiKit.Label(top, "", 40, TextAnchor.MiddleCenter, UiKit.Ink);
+            _arenaScore.rectTransform.Place(new Vector2(0, 0.45f), Vector2.one);
+            _arenaClock = UiKit.Label(top, "", 30, TextAnchor.MiddleCenter, UiKit.Ink);
+            _arenaClock.rectTransform.Place(Vector2.zero, new Vector2(1, 0.45f));
+            _arenaHits = UiKit.Label(_arenaHud, "", 32, TextAnchor.MiddleLeft, Color.white);
+            _arenaHits.gameObject.AddComponent<Shadow>();
+            _arenaHits.rectTransform.Place(new Vector2(0, 1), new Vector2(0.4f, 1), new Vector2(24, -110), new Vector2(0, -30));
+            UiKit.Button(_arenaHud, "ออกจากแมตช์", UiKit.Muted, ConfirmLeaveArena, 26).GetComponent<RectTransform>()
+                .Place(new Vector2(1, 1), new Vector2(1, 1), new Vector2(-250, -100), new Vector2(-16, -16));
+            var throwBtn = UiKit.Button(_arenaHud, "ปา!", UiKit.Good, () => _s.ThrowBalloon(), 44);
+            throwBtn.GetComponent<RectTransform>().Place(new Vector2(1, 0), new Vector2(1, 0), new Vector2(-330, 40), new Vector2(-40, 260));
+            _arenaThrowText = throwBtn.GetComponentInChildren<Text>();
+            _arenaThrowBg = throwBtn.GetComponent<Image>();
+            UiKit.Label(_arenaHud, "<size=22>แตะตัวคนทีมตรงข้ามเพื่อเล็ง · เดินเข้าใกล้ให้อยู่ในระยะ</size>", 22, TextAnchor.LowerRight, Color.white)
+                .rectTransform.Place(new Vector2(0.5f, 0), new Vector2(1, 0), new Vector2(0, 270), new Vector2(-40, 310));
+            _arenaHud.gameObject.SetActive(false);
+        }
+
+        /// <summary>In a match only the joystick stays from the city HUD; everything else comes back afterwards.</summary>
+        public void SetArenaMode(bool on)
+        {
+            if (_arenaHud == null) BuildArenaHud();
+            if (on && !_arenaHud.gameObject.activeSelf)
+            {
+                _hiddenForArena.Clear();
+                foreach (Transform c in _hud)
+                {
+                    if (c == _arenaHud || !c.gameObject.activeSelf || (Joystick != null && Joystick.transform.IsChildOf(c))) continue;
+                    _hiddenForArena.Add(c.gameObject);
+                    c.gameObject.SetActive(false);
+                }
+            }
+            else if (!on && _arenaHud.gameObject.activeSelf)
+            {
+                foreach (var go in _hiddenForArena) if (go != null) go.SetActive(true);
+                _hiddenForArena.Clear();
+                _arenaQueueBtn.gameObject.SetActive(_s.ArenaQueue != null);
+            }
+            _arenaHud.gameObject.SetActive(on);
+            _arenaTickAt = 0;
+        }
+
+        /// <summary>Called every frame in a match; redraws the score, clock and throw button ten times a second.</summary>
+        public void TickArena(ArenaMatch m, double clock, bool hasTarget)
+        {
+            if (_arenaHud == null || Time.unscaledTime < _arenaTickAt) return;
+            _arenaTickAt = Time.unscaledTime + 0.1f;
+            _arenaScore.text = ArenaPresenter.ScoreLine(m);
+            _arenaClock.text = m.Over ? "จบเกม" : ArenaPresenter.ClockLine(m, clock) + "  ·  " + ArenaPresenter.TeamName(m.MyTeam);
+            _arenaHits.text = ArenaPresenter.HitsLine(m);
+            var cd = m.CooldownLeft(clock);
+            var ready = m.CanThrow(clock) && hasTarget;
+            _arenaThrowText.text = !m.Started(clock) ? "รอสัญญาณ" : cd > 0 ? "เติมลูกโป่ง..." : hasTarget ? "ปา!" + (Application.isMobilePlatform ? "" : " [Space]") : "เข้าใกล้อีกนิด";
+            _arenaThrowBg.color = ready ? UiKit.Good : UiKit.Muted;
+        }
+
+        public void SetArenaQueue(ArenaQueued q)
+        {
+            if (_arenaQueueBtn == null) return;
+            _arenaQueueBtn.gameObject.SetActive(q != null && (_arenaHud == null || !_arenaHud.gameObject.activeSelf));
+            _queueTickAt = 0;
+            if (q != null) TickArenaQueue(q);
+        }
+
+        public void TickArenaQueue(ArenaQueued q)
+        {
+            if (Time.unscaledTime < _queueTickAt) return;
+            _queueTickAt = Time.unscaledTime + 0.5f;
+            _arenaQueueText.text = ArenaPresenter.QueueLine(q, DateTime.UtcNow).Replace("\n", " ") + "\n<size=20>แตะเพื่อยกเลิก</size>";
+        }
+
+        private void ConfirmLeaveArena()
+        {
+            var m = _s.Arena;
+            if (m == null) return;
+            if (m.Over)
+            {
+                _s.Run(_s.LeaveArenaAsync);
+                return;
+            }
+            var list = OpenModal("ออกจากแมตช์?");
+            UiKit.Row(list, "ถ้าออกตอนนี้จะนับเป็นแพ้ แต้มแรงค์ลด และไม่ได้เหรียญรอบนี้นะ", 110);
+            UiKit.RowButton(UiKit.Row(list, "เล่นต่อดีกว่า"), "เล่นต่อ", UiKit.Good, CloseModal, 170);
+            UiKit.RowButton(UiKit.Row(list, "ออกเลย"), "ออก", UiKit.Danger, () => { CloseModal(); _s.Run(_s.LeaveArenaAsync); }, 170);
+        }
+
+        /// <summary>My rank this season, how the mode works, the queue button, my last matches and the leaderboard.</summary>
+        public void ShowArena()
+        {
+            var list = OpenModal(Texts.T("ui.arena"));
+            Loading(list);
+            _s.Run(async () =>
+            {
+                var me = await _s.Api.GetArenaMeAsync();
+                var board = await _s.Api.GetArenaLeaderboardAsync(20);
+                UiKit.Clear(list);
+                UiKit.Row(list, ArenaPresenter.RankLine(me), 120);
+                UiKit.Row(list, "<size=24>" + ArenaPresenter.SeasonLine(me, DateTime.UtcNow) + "\n" + ArenaPresenter.RewardLine(me) + "</size>", 100);
+                var play = UiKit.Row(list, "<b>ทีมละ 3 คน · 2 นาที</b>\n<size=24>ปาลูกโป่งน้ำใส่อีกทีม โดน 4 ลูกเปียกโชก ทีมที่ทำให้อีกฝั่งเปียกมากกว่าชนะ</size>", 130);
+                if (_s.ArenaQueue != null)
+                    UiKit.RowButton(play, "ยกเลิกคิว", UiKit.Muted, () => { CloseModal(); _s.Run(_s.CancelArenaQueueAsync); }, 190);
+                else
+                    UiKit.RowButton(play, "หาทีมเลย!", UiKit.Good, () => { CloseModal(); _s.Run(_s.QueueArenaAsync); }, 190);
+                UiKit.Row(list, "<size=22>เล่นได้เฉพาะในอารีน่า เมืองยังปลอดภัยเสมอ · เจอแต่คนช่วงอายุเดียวกัน · คนที่บล็อกกันจะไม่อยู่แมตช์เดียวกัน · ทุกคนพลังเท่ากัน ซื้อด้วยเงินไม่ได้</size>", 110);
+
+                if (me.recent.Count > 0)
+                {
+                    UiKit.Row(list, "<b>แมตช์ล่าสุด</b>", 70);
+                    foreach (var r in me.recent)
+                        UiKit.Row(list, "<size=26>" + (r.outcome == "WIN" ? "ชนะ" : r.outcome == "DRAW" ? "เสมอ" : "แพ้") + (r.leftEarly ? " (ออกก่อน)" : "") + "  " + r.score.RED + ":" + r.score.BLUE
+                            + "  ·  แต้ม " + (r.delta >= 0 ? "+" : "") + r.delta + (r.rewardGold > 0 ? "  ·  +" + r.rewardGold + " ทอง" : "") + "</size>", 70);
+                }
+                UiKit.Row(list, "<b>อันดับซีซั่นนี้</b>", 70);
+                if (board.entries.Count == 0) UiKit.Row(list, "<size=24>ยังไม่มีใครลงแข่ง เป็นคนแรกเลย!</size>", 70);
+                foreach (var e in board.entries)
+                    UiKit.Row(list, (e.isMe ? "<color=#2E7D32><b>" : "") + e.position + ". " + ArenaPresenter.TierIcon(e.tier) + " " + e.displayName + "  " + e.rating
+                        + " <size=22>(" + ArenaPresenter.TierName(e.tier) + ")</size>" + (e.isMe ? "</b></color>" : ""), 70);
+            });
+        }
+
+        /// <summary>The final whistle: score, my rank change and Gold. Closing it walks back to the city.</summary>
+        public void ShowArenaResult(ArenaMatch m)
+        {
+            var list = OpenModal(ArenaPresenter.ResultTitle(m));
+            foreach (var line in ArenaPresenter.ResultLines(m))
+                if (line.Length > 0) UiKit.Row(list, line, 80);
+            UiKit.RowButton(UiKit.Row(list, "สนุกไหม? ไปอีกรอบได้เลย"), "เล่นอีกรอบ", UiKit.Good, () =>
+            {
+                CloseModal();
+                _s.Run(async () =>
+                {
+                    await _s.LeaveArenaAsync();
+                    await _s.QueueArenaAsync();
+                });
+            }, 200);
+            UiKit.RowButton(UiKit.Row(list, "กลับไปเดินเล่นในเมือง"), "กลับเมือง", UiKit.Primary, () => { CloseModal(); _s.Run(_s.LeaveArenaAsync); }, 200);
         }
 
         // ---------- first home (Phase 10) ----------

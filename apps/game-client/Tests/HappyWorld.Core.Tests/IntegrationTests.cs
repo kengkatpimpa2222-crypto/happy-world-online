@@ -365,6 +365,56 @@ namespace HappyWorld.Core.Tests
             Assert.Equal(r.gold, (await api.GetWalletAsync()).Gold);
         }
 
+        /// <summary>Phase 13: a lone player queues for the Splash Arena, gets bots, rank is read over REST, then walks out.</summary>
+        [Fact]
+        public async Task ArenaQueueWithBotsThenLeaveCountsAsALoss()
+        {
+            if (Url == null) return;
+            var me = await NewGuest(AgeBand.Teen);
+            var before = await me.GetArenaMeAsync();
+            Assert.Equal("BRONZE", before.tier);
+            var rt = new RealtimeClient(me.ServerRoot, me.AccessToken);
+            bool ready = false;
+            ArenaQueued queued = null;
+            ArenaMatch match = null;
+            ArenaEnd end = null;
+            rt.Ready += _ => ready = true;
+            rt.ArenaQueued += q => queued = q;
+            rt.ArenaStart += s => match = new ArenaMatch(s, 0);
+            rt.ArenaEnd += e => end = e;
+            try
+            {
+                await rt.ConnectAsync();
+                await Until(() => ready, rt);
+                Assert.True((await rt.QueueArenaAsync()).Ok);
+                await Until(() => queued != null, rt);
+                Assert.Equal(1, queued.waiting);
+                // the backend fills the teams with bots after ARENA_BOT_FILL_SECONDS (start it with a small value)
+                await Until(() => match != null, rt);
+                Assert.True(match.WithBots);
+                Assert.Equal(me.UserId, match.MyId);
+                Assert.Equal(5, match.Fighters.Count(f => f.IsBot));
+
+                var far = await rt.ThrowBalloonAsync(match.NearestEnemy(match.Me.X, match.Me.Y).Id);
+                Assert.False(far.Ok);
+                Assert.Equal("ARENA_THROW_REFUSED", far.ErrorCode);
+
+                Assert.True((await rt.LeaveArenaAsync()).Ok);
+                await Until(() => end != null, rt);
+                var mine = end.results.Single(r => r.userId == me.UserId);
+                Assert.True(mine.leftEarly);
+                Assert.Equal("LOSS", mine.outcome);
+                Assert.Equal(0, mine.rewardGold);
+                var after = await me.GetArenaMeAsync();
+                Assert.Equal(before.rating + mine.delta, after.rating);
+                Assert.Equal(1, after.losses);
+            }
+            finally
+            {
+                await rt.CloseAsync();
+            }
+        }
+
         [Fact]
         public async Task BadTokenIsRefused()
         {

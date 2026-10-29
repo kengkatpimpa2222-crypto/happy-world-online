@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using HappyWorld.Core.Api;
+using HappyWorld.Core.World;
 using Newtonsoft.Json.Linq;
 
 namespace HappyWorld.Core.Realtime
@@ -175,6 +176,15 @@ namespace HappyWorld.Core.Realtime
         public event Action<string, int> HomeLayoutChanged;
         /// <summary>home:kicked — ownerId: you may no longer be in that home.</summary>
         public event Action<string> HomeKicked;
+        // Phase 13: Splash Arena
+        public event Action<ArenaQueued> ArenaQueued;
+        public event Action<ArenaStart> ArenaStart;
+        public event Action<ArenaMoved> ArenaMoved;
+        public event Action<ArenaThrown> ArenaThrown;
+        public event Action<ArenaRespawn> ArenaRespawn;
+        /// <summary>arena:left — a fighter (id) walked out of the match.</summary>
+        public event Action<string> ArenaLeft;
+        public event Action<ArenaEnd> ArenaEnd;
         public event Action<string> ConnectError;
         public event Action<string> Disconnected;
 
@@ -206,6 +216,13 @@ namespace HappyWorld.Core.Realtime
             _io.On("home:state", p => HomeState?.Invoke(p.ToObject<HomeState>()));
             _io.On("home:layout", p => HomeLayoutChanged?.Invoke((string)p?["ownerId"], (int?)p?["layoutVersion"] ?? 0));
             _io.On("home:kicked", p => HomeKicked?.Invoke((string)p?["ownerId"]));
+            _io.On("arena:queued", p => ArenaQueued?.Invoke(p.ToObject<ArenaQueued>()));
+            _io.On("arena:start", p => ArenaStart?.Invoke(p.ToObject<ArenaStart>()));
+            _io.On("arena:moved", p => ArenaMoved?.Invoke(p.ToObject<ArenaMoved>()));
+            _io.On("arena:thrown", p => ArenaThrown?.Invoke(p.ToObject<ArenaThrown>()));
+            _io.On("arena:respawn", p => ArenaRespawn?.Invoke(p.ToObject<ArenaRespawn>()));
+            _io.On("arena:left", p => ArenaLeft?.Invoke((string)p?["id"]));
+            _io.On("arena:end", p => ArenaEnd?.Invoke(p.ToObject<ArenaEnd>()));
         }
 
         /// <summary>Opens the socket. Completion means the TCP/WebSocket is open; wait for <see cref="Ready"/> before joining a zone.</summary>
@@ -234,6 +251,27 @@ namespace HappyWorld.Core.Realtime
 
         public async Task<RealtimeAck> HeartbeatAsync() =>
             RealtimeAck.From(await _io.EmitWithAckAsync("heartbeat").ConfigureAwait(false));
+
+        // ---------- Splash Arena (Phase 13): opt-in, reached only from the queue ----------
+
+        /// <summary>Join the queue (again = keep my place). The match itself arrives as arena:start.</summary>
+        public async Task<RealtimeAck> QueueArenaAsync() =>
+            RealtimeAck.From(await _io.EmitWithAckAsync("arena:queue").ConfigureAwait(false));
+
+        public async Task<RealtimeAck> CancelArenaAsync() =>
+            RealtimeAck.From(await _io.EmitWithAckAsync("arena:cancel").ConfigureAwait(false));
+
+        /// <summary>A step inside the arena; a refusal carries the server's position in error x/y.</summary>
+        public async Task<RealtimeAck> SendArenaMoveAsync(float x, float y, int seq) =>
+            RealtimeAck.From(await _io.EmitWithAckAsync("arena:move", new { x, y, seq }).ConfigureAwait(false));
+
+        /// <summary>Throw a balloon at targetId; error ARENA_THROW_REFUSED carries error.reason.</summary>
+        public async Task<RealtimeAck> ThrowBalloonAsync(string targetId) =>
+            RealtimeAck.From(await _io.EmitWithAckAsync("arena:throw", new { targetId }).ConfigureAwait(false));
+
+        /// <summary>Give up and walk out (counts as a loss).</summary>
+        public async Task<RealtimeAck> LeaveArenaAsync() =>
+            RealtimeAck.From(await _io.EmitWithAckAsync("arena:leave").ConfigureAwait(false));
 
         public Task CloseAsync() => _io.CloseAsync();
 

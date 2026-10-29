@@ -50,10 +50,37 @@ socket.on('ready', () => socket.emitWithAck('zone:join', { zone: 'PLAZA' }));
 
 `PublicPlayer = { userId, displayName, level, avatar, x, y, dir }` ไม่มี friend code, อีเมล หรือช่วงอายุ
 
+### ศึกลูกโป่งน้ำ (Phase 13)
+
+Client → Server (ทุกตัวมี ack `{ok, ...}` หรือ `{ok:false, error:{code, message, ...}}`):
+
+| Event | Payload | หมายเหตุ |
+|---|---|---|
+| `arena:queue` | – | เข้าคิว (ซ้ำได้ ไม่เสียที่) ack `{waiting, botsJoinAt}`; `ARENA_IN_MATCH` ถ้ากำลังเล่นอยู่ |
+| `arena:cancel` | – | ออกจากคิว `{removed}` |
+| `arena:move` | `{x, y, seq?}` | ตรวจขอบสนามและความเร็วเหมือนในเมือง ถูกปฏิเสธ = `MOVE_REJECTED` พร้อม `{x, y, seq}` ตำแหน่งที่ server ยอมรับ |
+| `arena:throw` | `{targetId}` | `ARENA_THROW_REFUSED` + `reason`: `NOT_STARTED, OVER, SOAKED, COOLDOWN, BAD_TARGET, OUT_OF_RANGE` |
+| `arena:leave` | – | ยอมแพ้/ออก (นับแพ้ ไม่ได้เหรียญ) |
+
+Server → Client:
+
+| Event | Payload |
+|---|---|
+| `arena:queued` | `{waiting, botsJoinAt}` |
+| `arena:start` | `{matchId, you {userId, team}, startsAt, endsAt, serverTime, field {width, height}, rules {throwRange, throwCooldownMs, hitsToSoak}, withBots, players[{id, team, isBot, x, y, hits, soaked, displayName, level, avatar, rating}]}` |
+| `arena:moved` | `{id, x, y, seq?}` (volatile) |
+| `arena:thrown` | `{by, target, hit, targetHits, soaked, respawnAt, score {RED, BLUE}}` |
+| `arena:respawn` | `{id, x, y, shieldUntil}` |
+| `arena:left` | `{id}` |
+| `arena:end` | `{matchId, score, outcome {RED, BLUE}, saved, players[{id, team, isBot, left, soaks, soakedTimes, balloonsHit}], results[{userId, team, outcome, leftEarly, ratingBefore, ratingAfter, delta, tierBefore, tier, rewardGold}]}` |
+
+กติกา: ทีมละ 3 (บอทเติมเมื่อรอเกิน 15 วิ) สนาม 32×20 ระยะปา 6 คูลดาวน์ 0.8 วิ (บอท 1.4 วิ และพลาดได้ 35%) โดน 4 ลูก = เปียกโชก กลับฐานใน 3 วิ และโดนไม่ได้ 1.5 วิหลังกลับ แมตช์ 2 นาที (นับถอยหลัง 3 วิ) ทีมที่ทุกคนออกแพ้ทันที แมตช์และคิวอยู่ในหน่วยความจำของ instance ที่ผู้เล่นต่ออยู่ (หลาย instance = จับคู่ภายใน instance เดียวกัน)
+
 ## กฎความปลอดภัย
 
 - **ห้องแยกตามช่วงอายุ**: ห้องคือ `zone:<ZONE>:<AGE_BAND>:<shard>` ผู้เล่นต่างช่วงอายุไม่เห็นกัน ไม่ได้ยินกัน
 - **บล็อก**: ผู้ที่บล็อกกัน (ทางใดทางหนึ่ง) ไม่ได้รับ event ของกันและกัน หายจากจอทันทีที่บล็อก
 - **Shard**: แต่ละโซนรับผู้เล่นได้จำกัด (PLAZA 50 คน) เกินแล้วเปิด shard ใหม่อัตโนมัติ
 - **บ้าน** (Phase 10): ห้อง `home:<ownerId>` ไม่ broadcast ออกนอกบ้าน `move` ในบ้านใช้ขอบเขตห้อง เมื่อสิทธิ์เปลี่ยน server ตรวจผู้มาเยี่ยมทุกคนใหม่ (ผ่าน Redis ถ้ามีหลาย instance)
+- **อารีน่า** (Phase 13): โจมตีได้เฉพาะในแมตช์ที่ผู้เล่นเข้าคิวเอง ห้อง `arena:<matchId>` จับคู่เฉพาะช่วงอายุเดียวกัน และไม่จับคู่คนที่บล็อกกัน (อ่านรายการบล็อกล่าสุดทุกครั้งที่จับคู่) ตอนแมตช์เริ่ม server พาผู้เล่นออกจากห้องเมือง/บ้าน (คนอื่นเห็น `player:left`)
 - หลาย instance: ตั้ง `REDIS_URL` แล้ว presence และ event จะใช้ Redis (Socket.IO Redis adapter) ร่วมกัน

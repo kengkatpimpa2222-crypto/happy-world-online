@@ -228,6 +228,12 @@ namespace HappyWorld.Core.Localization
             ["JOB_SHIFT_TOO_EARLY"] = "ใจเย็น ๆ ค่อย ๆ ตรวจอีกนิดแล้วค่อยส่ง",
             ["JOB_SHIFT_EXPIRED"] = "กะนี้นานเกินไปแล้ว เริ่มกะใหม่ได้เลย",
             ["JOB_ANSWER_INVALID"] = "คำตอบไม่ครบ ลองเปิดกะใหม่อีกครั้ง",
+
+            // Splash Arena (Phase 13)
+            ["ui.arena"] = "ศึกลูกโป่งน้ำ",
+            ["ARENA_IN_MATCH"] = "กำลังอยู่ในแมตช์อยู่แล้วนะ",
+            ["ARENA_NOT_IN_MATCH"] = "แมตช์จบไปแล้ว",
+            ["ARENA_THROW_REFUSED"] = "ยังปาไม่ได้ตอนนี้",
         };
 
         private static readonly Dictionary<string, string> En = new Dictionary<string, string>
@@ -249,6 +255,9 @@ namespace HappyWorld.Core.Localization
             ["ui.hand_in"] = "Hand in",
             ["JOB_LOCKED"] = "This job needs a higher Worker level",
             ["JOB_SHIFT_TOO_EARLY"] = "Take a moment to check, then hand in",
+            ["ui.arena"] = "Splash Arena",
+            ["ARENA_IN_MATCH"] = "You are already in a match",
+            ["ARENA_NOT_IN_MATCH"] = "That match is over",
         };
 
         public static string T(string key)

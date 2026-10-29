@@ -90,6 +90,15 @@ namespace HappyWorld.Unity
         public JobsOverview Jobs { get; private set; }
         private bool _jobsLoading;
         private JobBoardView _jobBoards;
+        // Phase 13: Splash Arena (opt-in team mode); null while not in a match / not queueing
+        public ArenaMatch Arena { get; private set; }
+        public ArenaQueued ArenaQueue { get; private set; }
+        private ArenaView _arenaView;
+        private string _arenaTarget;     // the enemy I tapped last: the throw button prefers them
+        private float _arenaMoveAt;
+        private int _arenaSeq;
+        private Vector2 _arenaSent;
+        private bool _arenaThrowing;
         // Phase 9.1: the current expedition's countdown; the server decides when it is back
         public readonly ExpeditionTracker Trips = new ExpeditionTracker();
         private bool _tripCheckRunning;
@@ -376,6 +385,9 @@ namespace HappyWorld.Unity
             Rt.Ready += _ =>
             {
                 _autoRetries = 0;
+                // a dropped connection forfeits a running match and the queue (the server already counted it)
+                if (Arena != null) EndArenaView();
+                SetArenaQueue(null);
                 Trips.Resync(Clock); // reconnected: a trip may have come back while the link was down
                 Run(RejoinAsync);
             };
@@ -393,6 +405,18 @@ namespace HappyWorld.Unity
                 Run(() => JoinZoneAsync("HOMES"));
             };
             Rt.ZoneState += OnZoneState;
+            Rt.ArenaQueued += SetArenaQueue;
+            Rt.ArenaStart += OnArenaStart;
+            Rt.ArenaMoved += m => Arena?.OnMoved(m);
+            Rt.ArenaThrown += OnArenaThrown;
+            Rt.ArenaRespawn += r =>
+            {
+                if (Arena == null) return;
+                Arena.OnRespawn(r);
+                if (r.id == Profile.userId) ArenaTeleport(r.x, r.y);
+            };
+            Rt.ArenaLeft += id => Arena?.OnLeft(id);
+            Rt.ArenaEnd += OnArenaEnd;
             Rt.PresetChat += m =>
             {
                 AvatarView v;
@@ -1135,6 +1159,14 @@ namespace HappyWorld.Unity
             _wantHomeOwner = null;
             _wantZone = "PLAZA";
             Trips.Reset();
+            Arena = null;
+            ArenaQueue = null;
+            _arenaView = null;
+            if (_ui != null)
+            {
+                _ui.SetArenaMode(false);
+                _ui.SetArenaQueue(null);
+            }
             if (_ambience != null)
             {
                 _ambience.Target = null;
@@ -1197,6 +1229,13 @@ namespace HappyWorld.Unity
                 }
             }
 
+            if (Arena != null)
+            {
+                UpdateArena();
+                return;
+            }
+            if (ArenaQueue != null) _ui.TickArenaQueue(ArenaQueue);
+
             // decorating works offline too (only Save needs the server); the avatar stands still meanwhile
             if (Editor != null && _local != null)
             {
@@ -1237,13 +1276,7 @@ namespace HappyWorld.Unity
         /// <summary>Tap/click on another player opens their actions (add friend, block, report); on a market stall, its details.</summary>
         private void HandleTap()
         {
-            if (!Input.GetMouseButtonDown(0) || _ui.ModalOpen) return;
-            if (EventSystem.current != null)
-            {
-                if (EventSystem.current.IsPointerOverGameObject()) return;
-                for (int i = 0; i < Input.touchCount; i++)
-                    if (EventSystem.current.IsPointerOverGameObject(Input.GetTouch(i).fingerId)) return;
-            }
+            if (!Input.GetMouseButtonDown(0) || _ui.ModalOpen || PointerOverUi()) return;
             var ray = Camera.main.ScreenPointToRay(Input.mousePosition);
             RaycastHit hit;
             if (!Physics.Raycast(ray, out hit, 200f, ~0, QueryTriggerInteraction.Collide)) return;
@@ -1257,6 +1290,211 @@ namespace HappyWorld.Unity
             if (view == null || view.UserId == Profile.userId) return;
             var p = City.Get(view.UserId);
             if (p != null) _ui.ShowPlayerActions(p);
+        }
+
+        private static bool PointerOverUi()
+        {
+            if (EventSystem.current == null) return false;
+            if (EventSystem.current.IsPointerOverGameObject()) return true;
+            for (int i = 0; i < Input.touchCount; i++)
+                if (EventSystem.current.IsPointerOverGameObject(Input.GetTouch(i).fingerId)) return true;
+            return false;
+        }
+
+        // ---------- Splash Arena (Phase 13) ----------
+
+        /// <summary>Join the queue; the match arrives as arena:start (bots join when the queue is quiet).</summary>
+        public async Task QueueArenaAsync()
+        {
+            if (Rt == null || Arena != null) return;
+            if (CurrentHome != null && Editor != null) StopDecorating(false);
+            var ack = await Rt.QueueArenaAsync();
+            if (!ack.Ok) _ui.Toast(Texts.Error(ack.ErrorCode, ack.ErrorMessage));
+        }
+
+        public async Task CancelArenaQueueAsync()
+        {
+            SetArenaQueue(null);
+            if (Rt != null) await Rt.CancelArenaAsync();
+        }
+
+        /// <summary>Walk out of a running match (a loss) or, once it is over, just go back to the city.</summary>
+        public async Task LeaveArenaAsync()
+        {
+            if (Arena == null) return;
+            if (!Arena.Over && Rt != null) await Rt.LeaveArenaAsync();
+            ExitArena();
+        }
+
+        private void SetArenaQueue(ArenaQueued q)
+        {
+            ArenaQueue = q;
+            if (_ui != null) _ui.SetArenaQueue(q);
+        }
+
+        private void OnArenaStart(ArenaStart s)
+        {
+            SetArenaQueue(null);
+            if (Editor != null) StopDecorating(false);
+            LeaveHomeView();
+            City.Clear();
+            _ui.CloseModal();
+            Arena = new ArenaMatch(s, Clock);
+            _arenaTarget = null;
+            _arenaSeq = 0;
+            CurrentZone = null; // the city's prompts, portals and boards stay quiet while playing
+            _portals = new List<CityBuilder.PortalInfo>();
+            _jobBoards = null;
+            _market = null;
+            _district = null;
+            _arenaView = ArenaView.Create(_zoneRoot, Arena, _local.transform);
+            _local.Width = Arena.Field.width;
+            _local.Height = Arena.Field.height;
+            var me = Arena.Me;
+            ArenaTeleport(me != null ? me.X : 3, me != null ? me.Y : Arena.Field.height / 2);
+            _local.transform.rotation = Quaternion.LookRotation(Arena.MyTeam == "RED" ? Vector3.right : Vector3.left);
+            _ui.SetZone(Texts.T("ui.arena"));
+            _ui.SetArenaMode(true);
+            GameAudio.Sfx("sfx_countdown");
+            _ui.Toast(ArenaPresenter.TeamName(Arena.MyTeam) + "! ปาลูกโป่งใส่อีกทีมให้เปียกโชก" + (Arena.WithBots ? " (มีบอทมาช่วยเล่น)" : ""));
+        }
+
+        private void OnArenaThrown(ArenaThrown t)
+        {
+            if (Arena == null) return;
+            Arena.OnThrown(t);
+            if (_arenaView != null) _arenaView.Throw(t.by, t.target, t.hit, t.soaked);
+            if (t.target == Profile.userId && t.hit) GameAudio.Sfx(t.soaked ? "sfx_lose" : "sfx_pop");
+            else if (t.by == Profile.userId) GameAudio.Sfx(t.soaked ? "sfx_star" : t.hit ? "sfx_good" : "sfx_miss");
+            if (t.soaked && t.by == Profile.userId) _ui.Toast("ทำให้ " + (Arena.Get(t.target)?.Name ?? "") + " เปียกโชก! +1 แต้มทีม");
+        }
+
+        private void OnArenaEnd(ArenaEnd e)
+        {
+            if (Arena == null || e.matchId != Arena.MatchId)
+            {
+                // a match I walked out of earlier finished: its rank change is in the arena screen
+                return;
+            }
+            Arena.OnEnd(e);
+            var r = Arena.MyResult;
+            GameAudio.Sfx(r != null && r.outcome == "WIN" ? "sfx_fanfare" : "sfx_whoosh");
+            _ui.ShowArenaResult(Arena);
+        }
+
+        private void UpdateArena()
+        {
+            var clock = Clock;
+            _arenaView.Sync(Time.deltaTime);
+            var me = Arena.Me;
+            var canWalk = Arena.Started(clock) && !Arena.Over && me != null && !me.Soaked && !me.Left;
+            _local.InputEnabled = canWalk && !_ui.ModalOpen;
+            var pos = _local.ServerPos;
+            Arena.SetMyPosition(pos.x, pos.y);
+            if (Rt.Connected && canWalk && Time.time >= _arenaMoveAt && (pos - _arenaSent).sqrMagnitude > 0.0025f)
+            {
+                _arenaMoveAt = Time.time + 0.1f; // ~10 steps a second, like the city
+                _arenaSent = pos;
+                SendArenaMove(pos, ++_arenaSeq);
+            }
+            if (Rt.Connected && Limiter.HeartbeatDue(Time.time)) Fire(Rt.HeartbeatAsync());
+            var target = Arena.PickTarget(pos.x, pos.y, _arenaTarget);
+            _ui.TickArena(Arena, clock, target != null);
+
+            // the result card was closed with ✕: back to the city
+            if (Arena.Over && !_ui.ModalOpen)
+            {
+                ExitArena();
+                return;
+            }
+            if (Input.GetKeyDown(KeyCode.Space)) ThrowBalloon();
+            if (Input.GetMouseButtonDown(0) && !_ui.ModalOpen && !PointerOverUi())
+            {
+                RaycastHit hit;
+                if (Physics.Raycast(Camera.main.ScreenPointToRay(Input.mousePosition), out hit, 200f, ~0, QueryTriggerInteraction.Collide))
+                {
+                    var id = _arenaView.FighterUnder(hit.collider);
+                    if (id != null && Arena.IsEnemy(Arena.Get(id)))
+                    {
+                        _arenaTarget = id;
+                        ThrowBalloon();
+                    }
+                }
+            }
+        }
+
+        private async void SendArenaMove(Vector2 pos, int seq)
+        {
+            try
+            {
+                var ack = await Rt.SendArenaMoveAsync(pos.x, pos.y, seq);
+                if (ack.Ok || Arena == null || ack.ErrorCode != "MOVE_REJECTED") return;
+                var err = ack.Body["error"];
+                var x = (float?)err?["x"];
+                var y = (float?)err?["y"];
+                if (x.HasValue && y.HasValue && seq == _arenaSeq) ArenaTeleport(x.Value, y.Value);
+            }
+            catch (Exception) { /* best effort, like city moves */ }
+        }
+
+        private void ArenaTeleport(float x, float y)
+        {
+            _local.Teleport(x, y);
+            _arenaSent = new Vector2(x, y);
+            Limiter.Reset(x, y, Arena != null ? Arena.Field.width : 32, Arena != null ? Arena.Field.height : 20, Time.time);
+        }
+
+        /// <summary>The big throw button (Space on PC): at the tapped enemy if still in range, else the closest one.</summary>
+        public void ThrowBalloon()
+        {
+            if (Arena == null || _arenaThrowing || Rt == null) return;
+            var clock = Clock;
+            if (!Arena.CanThrow(clock)) return;
+            var pos = _local.ServerPos;
+            var target = Arena.PickTarget(pos.x, pos.y, _arenaTarget);
+            if (target == null)
+            {
+                var near = Arena.NearestEnemy(pos.x, pos.y);
+                _ui.Toast(near != null ? "ไกลไป เดินเข้าไปหา " + near.Name + " อีกนิดนะ" : "ยังไม่มีใครให้ปา");
+                return;
+            }
+            Arena.MarkThrown(clock);
+            var look = new Vector3(target.X - pos.x, 0, target.Y - pos.y);
+            if (look.sqrMagnitude > 0.01f) _local.transform.rotation = Quaternion.LookRotation(look);
+            _arenaThrowing = true;
+            Run(async () =>
+            {
+                try
+                {
+                    var ack = await Rt.ThrowBalloonAsync(target.Id);
+                    if (!ack.Ok)
+                    {
+                        var why = ArenaPresenter.ThrowRefused((string)ack.Body["error"]?["reason"]);
+                        if (why != null) _ui.Toast(why);
+                    }
+                }
+                finally
+                {
+                    _arenaThrowing = false;
+                }
+            });
+        }
+
+        private void ExitArena()
+        {
+            if (Arena == null) return;
+            EndArenaView();
+            _ui.RefreshHud(); // participation Gold
+            Run(() => JoinZoneAsync(_wantZone ?? "PLAZA"));
+        }
+
+        private void EndArenaView()
+        {
+            if (_arenaView != null) _arenaView.Dispose();
+            _arenaView = null;
+            Arena = null;
+            if (_local != null) _local.InputEnabled = true;
+            if (_ui != null) _ui.SetArenaMode(false);
         }
 
         // ---------- helpers ----------
