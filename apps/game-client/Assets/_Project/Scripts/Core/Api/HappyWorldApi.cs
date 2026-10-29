@@ -200,6 +200,10 @@ namespace HappyWorld.Core.Api
         public Task<JobFinishResult> FinishJobShiftAsync(string shiftId, List<List<int>> answers) =>
             SendAsync<JobFinishResult>("POST", "/jobs/shifts/" + shiftId + "/finish", new { answers });
 
+        // ---------- Splash Arena (Phase 13); playing happens over realtime ----------
+        public Task<ArenaMe> GetArenaMeAsync() => SendAsync<ArenaMe>("GET", "/arena/me");
+        public Task<ArenaLeaderboard> GetArenaLeaderboardAsync(int limit = 50) => SendAsync<ArenaLeaderboard>("GET", "/arena/leaderboard?limit=" + limit);
+
         // ---------- First home (Phase 10) ----------
         public Task<HomeView> GetMyHomeAsync() => SendAsync<HomeView>("GET", "/homes/me");
         /// <summary>Once only; a second call answers HOME_ALREADY_CLAIMED (then just read GET /homes/me).</summary>

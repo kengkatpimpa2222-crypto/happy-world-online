@@ -1153,4 +1153,71 @@ namespace HappyWorld.Core.Api
         public List<JobShift> recent = new List<JobShift>();
         public JobTotals totals = new JobTotals();
     }
+
+    // ---------- Splash Arena (Phase 13) ----------
+
+    /// <summary>Gold per match result (only the first matches of a Bangkok day pay).</summary>
+    public sealed class ArenaRewardGold
+    {
+        public int WIN, DRAW, LOSS;
+    }
+
+    public sealed class ArenaScore
+    {
+        public int RED, BLUE;
+    }
+
+    public sealed class ArenaRecentMatch
+    {
+        public string matchId;
+        public DateTime endedAt;
+        public string team;
+        /// <summary>WIN | DRAW | LOSS</summary>
+        public string outcome;
+        public bool leftEarly;
+        public ArenaScore score = new ArenaScore();
+        public bool withBots;
+        public int soaks;
+        public int delta;
+        public int rewardGold;
+    }
+
+    /// <summary>GET /arena/me</summary>
+    public sealed class ArenaMe
+    {
+        public string season;
+        public DateTime seasonEndsAt;
+        public int rating;
+        public int peak;
+        /// <summary>BRONZE | SILVER | GOLD | PLATINUM | DIAMOND | STAR</summary>
+        public string tier;
+        public string tierNameTh;
+        public int? nextTierAt;
+        public int wins, losses, draws;
+        public int position;
+        public int rewardedMatchesLeft;
+        public DateTime rewardsResetAt;
+        public ArenaRewardGold rewardGold = new ArenaRewardGold();
+        public List<ArenaRecentMatch> recent = new List<ArenaRecentMatch>();
+    }
+
+    public sealed class ArenaLeaderboardEntry
+    {
+        public int position;
+        public string userId;
+        public string displayName;
+        public int level;
+        public bool isMe;
+        public int rating;
+        public string tier;
+        public string tierNameTh;
+        public int wins, losses, draws;
+    }
+
+    /// <summary>GET /arena/leaderboard</summary>
+    public sealed class ArenaLeaderboard
+    {
+        public string season;
+        public List<ArenaLeaderboardEntry> entries = new List<ArenaLeaderboardEntry>();
+    }
 }

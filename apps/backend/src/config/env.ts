@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ARENA_BOT_FILL_SECONDS, ARENA_COUNTDOWN_SECONDS, ARENA_MATCH_SECONDS } from '@hwo/shared-contracts';
 
 const bool = z
   .enum(['true', 'false', '1', '0'])
@@ -37,6 +38,10 @@ export const envSchema = z.object({
   EXPEDITION_TIME_SCALE: z.coerce.number().min(0.001).max(1).default(1),
   /** Dev/QA only (Phase 11): shift the daily-reward clock (check-in day, mission day/week). Must be 0 in production. */
   DAILY_CLOCK_OFFSET_HOURS: z.coerce.number().min(-24 * 400).max(24 * 400).default(0),
+  /** Phase 13: Splash Arena timings. Tests and dev QA shorten them; production keeps a real match length. */
+  ARENA_MATCH_SECONDS: z.coerce.number().int().min(3).max(600).default(ARENA_MATCH_SECONDS),
+  ARENA_BOT_FILL_SECONDS: z.coerce.number().min(0).max(300).default(ARENA_BOT_FILL_SECONDS),
+  ARENA_COUNTDOWN_SECONDS: z.coerce.number().min(0).max(10).default(ARENA_COUNTDOWN_SECONDS),
 });
 
 export type Env = z.infer<typeof envSchema>;
@@ -57,6 +62,7 @@ export function validateEnv(raw: Record<string, unknown>): Env {
     if (env.CITY_WEATHER_OVERRIDE) throw new Error('CITY_WEATHER_OVERRIDE is not allowed in production');
     if (env.EXPEDITION_TIME_SCALE !== 1) throw new Error('EXPEDITION_TIME_SCALE must be 1 in production');
     if (env.DAILY_CLOCK_OFFSET_HOURS !== 0) throw new Error('DAILY_CLOCK_OFFSET_HOURS must be 0 in production');
+    if (env.ARENA_MATCH_SECONDS < 60) throw new Error('ARENA_MATCH_SECONDS must be at least 60 in production');
   }
   return env;
 }
